@@ -81,6 +81,14 @@ import kotlinx.coroutines.launch
 
 @Composable
 fun MainScreen() {
+    // Web vs Native AR mode toggle
+    var isWebMode by remember { mutableStateOf(false) }
+
+    if (isWebMode) {
+        WebARScreen(onSwitchToNative = { isWebMode = false })
+        return
+    }
+
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
 
@@ -285,12 +293,38 @@ fun MainScreen() {
                 isDemoMode = isDemoMode
             )
 
-            // Right: Futuristic [ ARMOR ] Menu Button
-            ArmorHudButton(
-                onClick = { isArmorPanelOpen = !isArmorPanelOpen },
-                isSelected = isArmorPanelOpen,
-                currentArmor = if (isEquipped) equippedArmor else null
-            )
+            // Right: Web Mode toggle & Futuristic [ ARMOR ] Menu Button
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                // Button to toggle Website / Web AR Mode
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = Color(0xCC090D16),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF00E5FF).copy(alpha = 0.5f)),
+                    modifier = Modifier.clickable { isWebMode = true }
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)
+                    ) {
+                        Text(
+                            text = "🌐 WEB",
+                            color = Color(0xFF00E5FF),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = FontFamily.Monospace
+                        )
+                    }
+                }
+
+                ArmorHudButton(
+                    onClick = { isArmorPanelOpen = !isArmorPanelOpen },
+                    isSelected = isArmorPanelOpen,
+                    currentArmor = if (isEquipped) equippedArmor else null
+                )
+            }
         }
 
         // -------------------------------------------------------------

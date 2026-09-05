@@ -1,0 +1,1376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>AR Armor - Web Body Tracking</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #07090e;
+      --panel-bg: rgba(10, 15, 26, 0.75);
+      --panel-border: rgba(0, 229, 255, 0.25);
+      --cyan: #00e5ff;
+      --cyan-glow: rgba(0, 229, 255, 0.5);
+      --gold: #ffb300;
+      --gold-glow: rgba(255, 179, 0, 0.4);
+      --dark-armor: #181b22;
+      --text-main: #f0f4f8;
+      --text-muted: #8a99ad;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    body, html {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: var(--bg);
+      font-family: 'Rajdhani', sans-serif;
+      color: var(--text-main);
+    }
+
+    #app-container {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* Video & Canvas layer */
+    #webcam {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      transform: scaleX(-1);
+      display: none;
+    }
+
+    #arCanvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+    }
+
+    /* HUD Layer */
+    .hud-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 10;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 16px;
+    }
+
+    .interactive {
+      pointer-events: auto;
+    }
+
+    /* Cyberpunk Corner Brackets */
+    .corner-bracket {
+      position: absolute;
+      width: 24px;
+      height: 24px;
+      border-color: var(--cyan);
+      opacity: 0.6;
+    }
+    .top-left { top: 12px; left: 12px; border-top: 2px solid; border-left: 2px solid; }
+    .top-right { top: 12px; right: 12px; border-top: 2px solid; border-right: 2px solid; }
+    .bottom-left { bottom: 12px; left: 12px; border-bottom: 2px solid; border-left: 2px solid; }
+    .bottom-right { bottom: 12px; right: 12px; border-bottom: 2px solid; border-right: 2px solid; }
+
+    /* Top Bar */
+    .top-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      width: 100%;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: var(--panel-bg);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--panel-border);
+      border-radius: 8px;
+      padding: 6px 14px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+    }
+
+    .brand h1 {
+      font-family: 'Orbitron', monospace;
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: 2px;
+      color: #fff;
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 1px;
+      padding: 3px 8px;
+      border-radius: 4px;
+      background: rgba(0, 229, 255, 0.15);
+      color: var(--cyan);
+      border: 1px solid rgba(0, 229, 255, 0.4);
+    }
+
+    .status-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--cyan);
+      box-shadow: 0 0 8px var(--cyan);
+      animation: pulse 1.6s infinite ease-in-out;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.8); }
+    }
+
+    .top-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .icon-btn {
+      background: var(--panel-bg);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--panel-border);
+      color: var(--cyan);
+      border-radius: 8px;
+      width: 40px;
+      height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .icon-btn:hover, .icon-btn:active {
+      background: rgba(0, 229, 255, 0.2);
+      border-color: var(--cyan);
+      box-shadow: 0 0 14px var(--cyan-glow);
+      transform: translateY(-1px);
+    }
+
+    .icon-btn svg {
+      width: 20px;
+      height: 20px;
+      fill: currentColor;
+    }
+
+    /* Armor Selector Drawer / Bottom Card */
+    .bottom-container {
+      width: 100%;
+      max-width: 480px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .armor-card {
+      background: var(--panel-bg);
+      backdrop-filter: blur(16px);
+      border: 1px solid var(--panel-border);
+      border-radius: 12px;
+      padding: 14px 18px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6), inset 0 0 16px rgba(0, 229, 255, 0.05);
+      transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+    }
+
+    .armor-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    .nav-arrow {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: var(--text-main);
+      width: 32px;
+      height: 32px;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: bold;
+      transition: all 0.2s ease;
+    }
+
+    .nav-arrow:hover {
+      background: rgba(0, 229, 255, 0.25);
+      border-color: var(--cyan);
+      color: var(--cyan);
+    }
+
+    .armor-title-box {
+      text-align: center;
+    }
+
+    .armor-title {
+      font-family: 'Orbitron', monospace;
+      font-size: 17px;
+      font-weight: 700;
+      letter-spacing: 2px;
+    }
+
+    .armor-subtitle {
+      font-size: 11px;
+      color: var(--text-muted);
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .stat-item {
+      background: rgba(255, 255, 255, 0.04);
+      border-radius: 6px;
+      padding: 6px 8px;
+      text-align: center;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .stat-label {
+      font-size: 10px;
+      color: var(--text-muted);
+      letter-spacing: 1px;
+    }
+
+    .stat-bar-container {
+      width: 100%;
+      height: 4px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 2px;
+      margin-top: 4px;
+      overflow: hidden;
+    }
+
+    .stat-bar {
+      height: 100%;
+      border-radius: 2px;
+      transition: width 0.4s ease;
+    }
+
+    .btn-equip {
+      width: 100%;
+      padding: 12px 16px;
+      border: none;
+      border-radius: 8px;
+      background: linear-gradient(90deg, #00b4d8, #00e5ff);
+      color: #07090e;
+      font-family: 'Orbitron', monospace;
+      font-weight: 900;
+      font-size: 13px;
+      letter-spacing: 2px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      box-shadow: 0 4px 20px var(--cyan-glow);
+      transition: all 0.2s ease;
+    }
+
+    .btn-equip:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 26px var(--cyan-glow);
+      filter: brightness(1.1);
+    }
+
+    .btn-equip.dark-theme-equip {
+      background: linear-gradient(90deg, #374151, #9ca3af);
+      color: #fff;
+      box-shadow: 0 4px 20px rgba(156, 163, 175, 0.4);
+    }
+
+    .quick-toolbar {
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .pill-btn {
+      background: var(--panel-bg);
+      backdrop-filter: blur(10px);
+      border: 1px solid var(--panel-border);
+      color: var(--text-main);
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 1px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s ease;
+    }
+
+    .pill-btn:hover {
+      border-color: var(--cyan);
+      color: var(--cyan);
+    }
+
+    /* Modal / Info Dialog */
+    .modal-backdrop {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(5, 7, 12, 0.85);
+      backdrop-filter: blur(8px);
+      z-index: 100;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .modal-content {
+      background: #0d121f;
+      border: 1px solid var(--cyan);
+      border-radius: 12px;
+      max-width: 480px;
+      width: 100%;
+      padding: 24px;
+      box-shadow: 0 0 30px rgba(0, 229, 255, 0.3);
+      position: relative;
+    }
+
+    .modal-title {
+      font-family: 'Orbitron', monospace;
+      font-size: 18px;
+      color: var(--cyan);
+      margin-bottom: 12px;
+      letter-spacing: 1px;
+    }
+
+    .modal-body {
+      font-size: 13px;
+      line-height: 1.6;
+      color: #cbd5e1;
+      margin-bottom: 20px;
+    }
+
+    .code-box {
+      background: #04060a;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      padding: 10px;
+      border-radius: 6px;
+      font-family: monospace;
+      font-size: 12px;
+      color: #38bdf8;
+      margin: 10px 0;
+      word-break: break-all;
+    }
+
+    /* Scan animation overlay element */
+    #scan-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 5;
+      display: none;
+    }
+
+    .scan-line {
+      position: absolute;
+      left: 0;
+      width: 100%;
+      height: 4px;
+      background: var(--cyan);
+      box-shadow: 0 0 20px 6px var(--cyan);
+      opacity: 0.9;
+    }
+  </style>
+</head>
+<body>
+  <div id="app-container">
+    <!-- Video capture element for camera stream -->
+    <video id="webcam" playsinline autoplay muted></video>
+
+    <!-- Main AR Canvas -->
+    <canvas id="arCanvas"></canvas>
+
+    <!-- Scanning line overlay for equip effect -->
+    <div id="scan-overlay">
+      <div class="scan-line" id="scanLine"></div>
+    </div>
+
+    <!-- Sci-Fi HUD Overlay -->
+    <div class="hud-overlay">
+      <div class="corner-bracket top-left"></div>
+      <div class="corner-bracket top-right"></div>
+      <div class="corner-bracket bottom-left"></div>
+      <div class="corner-bracket bottom-right"></div>
+
+      <!-- Top Navigation Bar -->
+      <div class="top-bar">
+        <div class="brand interactive">
+          <h1>AR ARMOR</h1>
+          <div class="status-badge" id="trackingStatus">
+            <span class="status-dot"></span>
+            <span id="statusText">SIMULATOR ACTIVE</span>
+          </div>
+        </div>
+
+        <div class="top-actions interactive">
+          <!-- Toggle Camera / Simulator -->
+          <button class="icon-btn" id="btnToggleCam" title="Toggle Webcam / Pose Simulator">
+            <svg viewBox="0 0 24 24"><path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/></svg>
+          </button>
+          <!-- Take Snapshot -->
+          <button class="icon-btn" id="btnSnapshot" title="Capture AR Photo">
+            <svg viewBox="0 0 24 24"><path d="M9 2L7.17 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2h-3.17L15 2H9zm3 15c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5z"/></svg>
+          </button>
+          <!-- Info / Web Guide -->
+          <button class="icon-btn" id="btnInfo" title="Website & Deployment Info">
+            <svg viewBox="0 0 24 24"><path d="M11 17h2v-6h-2v6zm1-15C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zM11 9h2V7h-2v2z"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Center Telemetry Reticle -->
+      <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); opacity: 0.25; pointer-events: none;">
+        <svg width="120" height="120" viewBox="0 0 120 120">
+          <circle cx="60" cy="60" r="50" fill="none" stroke="#00e5ff" stroke-width="1" stroke-dasharray="8 6"/>
+          <circle cx="60" cy="60" r="30" fill="none" stroke="#00e5ff" stroke-width="1"/>
+          <line x1="10" y1="60" x2="35" y2="60" stroke="#00e5ff" stroke-width="1"/>
+          <line x1="85" y1="60" x2="110" y2="60" stroke="#00e5ff" stroke-width="1"/>
+          <line x1="60" y1="10" x2="60" y2="35" stroke="#00e5ff" stroke-width="1"/>
+          <line x1="60" y1="85" x2="60" y2="110" stroke="#00e5ff" stroke-width="1"/>
+        </svg>
+      </div>
+
+      <!-- Bottom Controls -->
+      <div class="bottom-container">
+        <!-- Quick toolbar -->
+        <div class="quick-toolbar interactive">
+          <button class="pill-btn" id="btnPoseMode">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2c1.1 0 2 .9 2 2s-.9 2-2 2-2-.9-2-2 .9-2 2-2zm9 7h-6v13h-2v-6h-2v6H9V9H3V7h18v2z"/></svg>
+            <span id="poseModeLabel">STANCE: IDLE</span>
+          </button>
+          <button class="pill-btn" id="btnAudioToggle">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/></svg>
+            <span id="audioLabel">FX SOUND: ON</span>
+          </button>
+        </div>
+
+        <!-- Armor Selector Card -->
+        <div class="armor-card interactive" id="armorCard">
+          <div class="armor-header">
+            <button class="nav-arrow" id="btnPrevArmor">◀</button>
+            <div class="armor-title-box">
+              <div class="armor-title" id="armorName" style="color: #fff;">DARK KNIGHT</div>
+              <div class="armor-subtitle" id="armorSubtitle">Gothic Steel & Midnight Cowl</div>
+            </div>
+            <button class="nav-arrow" id="btnNextArmor">▶</button>
+          </div>
+
+          <div class="stats-row">
+            <div class="stat-item">
+              <div class="stat-label">DEFENSE</div>
+              <div style="font-size: 13px; font-weight: 700;" id="statDef">95%</div>
+              <div class="stat-bar-container">
+                <div class="stat-bar" id="barDef" style="width: 95%; background: #9ca3af;"></div>
+              </div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-label">AGILITY</div>
+              <div style="font-size: 13px; font-weight: 700;" id="statAgi">62%</div>
+              <div class="stat-bar-container">
+                <div class="stat-bar" id="barAgi" style="width: 62%; background: #60a5fa;"></div>
+              </div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-label">POWER</div>
+              <div style="font-size: 13px; font-weight: 700;" id="statPwr">92%</div>
+              <div class="stat-bar-container">
+                <div class="stat-bar" id="barPwr" style="width: 92%; background: #f59e0b;"></div>
+              </div>
+            </div>
+          </div>
+
+          <button class="btn-equip dark-theme-equip" id="btnEquip">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/></svg>
+            <span id="equipText">EQUIP DARK KNIGHT</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Info / Deployment Modal -->
+    <div class="modal-backdrop interactive" id="infoModal">
+      <div class="modal-content">
+        <div class="modal-title">AR BODY ARMOR (WEB SUITE)</div>
+        <div class="modal-body">
+          <p>This application is running the complete <strong>Web AR Body Tracking Engine</strong>:</p>
+          <ul style="margin: 10px 0 10px 20px;">
+            <li>Real-time front camera webcam tracking via <code>getUserMedia</code></li>
+            <li>Interactive virtual pose simulation (Idle, Sword Stance, Wave, Walk)</li>
+            <li>Custom vector renderers for <strong>Dark Knight</strong> & <strong>Cyber Knight</strong></li>
+            <li>Feet-to-head laser scanline equip animation with procedural Web Audio FX</li>
+          </ul>
+          <p><strong>To Deploy or Host this Website:</strong></p>
+          <div class="code-box">npx serve public<br/># or drag & drop to Vercel, Netlify, or GitHub Pages</div>
+          <p>You can also use this app directly inside any modern browser on PC, Mac, Android, and iOS.</p>
+        </div>
+        <button class="btn-equip" id="btnCloseModal" style="width: 100%;">CLOSE HUD</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ==========================================
+    // DATA & STATE
+    // ==========================================
+    const armors = [
+      {
+        id: 'dark_knight',
+        name: 'DARK KNIGHT',
+        subtitle: 'Gothic Steel & Midnight Cowl',
+        themeColor: '#9ca3af',
+        accentColor: '#374151',
+        glowColor: 'rgba(255, 255, 255, 0.25)',
+        def: 95,
+        agi: 62,
+        pwr: 92,
+        buttonClass: 'dark-theme-equip'
+      },
+      {
+        id: 'cyber_knight',
+        name: 'CYBER KNIGHT',
+        subtitle: 'Ceramic Exosuit & Cyan Visor',
+        themeColor: '#00e5ff',
+        accentColor: '#00b4d8',
+        glowColor: 'rgba(0, 229, 255, 0.6)',
+        def: 86,
+        agi: 96,
+        pwr: 89,
+        buttonClass: ''
+      }
+    ];
+
+    let currentArmorIndex = 0;
+    let isEquipping = false;
+    let scanProgress = 1.0; // 0 = feet, 1 = head
+    let scanStartTime = 0;
+    const SCAN_DURATION = 1800; // ms
+
+    let cameraActive = false;
+    let soundEnabled = true;
+    let poseModeIndex = 0;
+    const poseModes = ['IDLE', 'COMBAT', 'WAVE', 'WALK'];
+
+    // Audio Context for Procedural Sci-Fi FX
+    let audioCtx = null;
+
+    function playSound(type) {
+      if (!soundEnabled) return;
+      try {
+        if (!audioCtx) {
+          audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        if (audioCtx.state === 'suspended') {
+          audioCtx.resume();
+        }
+
+        const now = audioCtx.currentTime;
+        if (type === 'equip') {
+          // Futuristic laser charge sweep
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(140, now);
+          osc.frequency.exponentialRampToValueAtTime(880, now + 1.2);
+
+          gain.gain.setValueAtTime(0.01, now);
+          gain.gain.linearRampToValueAtTime(0.2, now + 0.3);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 1.6);
+
+          osc.connect(gain);
+          gain.connect(audioCtx.destination);
+          osc.start(now);
+          osc.stop(now + 1.6);
+
+          // Clank lock sound at the end
+          setTimeout(() => {
+            const clank = audioCtx.createOscillator();
+            const clankGain = audioCtx.createGain();
+            clank.type = 'triangle';
+            clank.frequency.setValueAtTime(320, audioCtx.currentTime);
+            clank.frequency.exponentialRampToValueAtTime(80, audioCtx.currentTime + 0.3);
+            clankGain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+            clankGain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+            clank.connect(clankGain);
+            clankGain.connect(audioCtx.destination);
+            clank.start();
+            clank.stop(audioCtx.currentTime + 0.3);
+          }, 1400);
+        } else if (type === 'click') {
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(580, now);
+          osc.frequency.exponentialRampToValueAtTime(740, now + 0.08);
+          gain.gain.setValueAtTime(0.12, now);
+          gain.gain.linearRampToValueAtTime(0.01, now + 0.08);
+          osc.connect(gain);
+          gain.connect(audioCtx.destination);
+          osc.start(now);
+          osc.stop(now + 0.08);
+        }
+      } catch (e) {
+        console.warn('Audio FX error:', e);
+      }
+    }
+
+    // ==========================================
+    // CANVAS & RENDERING ENGINE
+    // ==========================================
+    const canvas = document.getElementById('arCanvas');
+    const ctx = canvas.getContext('2d');
+    const video = document.getElementById('webcam');
+
+    function resizeCanvas() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    // Virtual Landmark Simulation
+    function getSimulatedPose(time) {
+      const t = time * 0.001;
+      const w = canvas.width;
+      const h = canvas.height;
+      const cx = w * 0.5;
+      const cy = h * 0.52;
+      const scale = Math.min(w, h) * 0.72;
+
+      // Base proportions
+      let headY = cy - scale * 0.44;
+      let leftShoulderX = cx - scale * 0.18;
+      let rightShoulderX = cx + scale * 0.18;
+      let shoulderY = cy - scale * 0.28;
+
+      let leftElbowX = cx - scale * 0.26;
+      let leftElbowY = cy - scale * 0.12;
+      let leftWristX = cx - scale * 0.28;
+      let leftWristY = cy + scale * 0.04;
+
+      let rightElbowX = cx + scale * 0.26;
+      rightElbowY = cy - scale * 0.12;
+      let rightWristX = cx + scale * 0.28;
+      let rightWristY = cy + scale * 0.04;
+
+      let leftHipX = cx - scale * 0.12;
+      let rightHipX = cx + scale * 0.12;
+      let hipY = cy + scale * 0.06;
+
+      let leftKneeX = cx - scale * 0.13;
+      let leftKneeY = cy + scale * 0.26;
+      let rightKneeX = cx + scale * 0.13;
+      let rightKneeY = cy + scale * 0.26;
+
+      let leftAnkleX = cx - scale * 0.14;
+      let leftAnkleY = cy + scale * 0.46;
+      let rightAnkleX = cx + scale * 0.14;
+      let rightAnkleY = cy + scale * 0.46;
+
+      // Subtle breathing motion
+      const breath = Math.sin(t * 2) * (scale * 0.008);
+      shoulderY += breath;
+      headY += breath * 0.8;
+
+      // Mode-specific movement
+      const mode = poseModes[poseModeIndex];
+      if (mode === 'WAVE') {
+        rightElbowY = cy - scale * 0.32;
+        rightElbowX = cx + scale * 0.30;
+        rightWristX = cx + scale * (0.32 + Math.sin(t * 5) * 0.08);
+        rightWristY = cy - scale * (0.45 + Math.cos(t * 5) * 0.03);
+      } else if (mode === 'COMBAT') {
+        // Sword Stance
+        leftElbowX = cx - scale * 0.12;
+        leftElbowY = cy - scale * 0.16;
+        leftWristX = cx + scale * 0.02;
+        leftWristY = cy - scale * 0.20;
+
+        rightElbowX = cx + scale * 0.14;
+        rightElbowY = cy - scale * 0.14;
+        rightWristX = cx + scale * 0.06;
+        rightWristY = cy - scale * 0.22;
+
+        leftKneeX = cx - scale * 0.18;
+        rightKneeX = cx + scale * 0.18;
+      } else if (mode === 'WALK') {
+        const walkSin = Math.sin(t * 3.5);
+        leftKneeY += walkSin * (scale * 0.04);
+        rightKneeY -= walkSin * (scale * 0.04);
+        leftAnkleY += walkSin * (scale * 0.05);
+        rightAnkleY -= walkSin * (scale * 0.05);
+
+        leftWristY += walkSin * (scale * 0.06);
+        rightWristY -= walkSin * (scale * 0.06);
+      }
+
+      return {
+        nose: { x: cx, y: headY },
+        leftShoulder: { x: leftShoulderX, y: shoulderY },
+        rightShoulder: { x: rightShoulderX, y: shoulderY },
+        leftElbow: { x: leftElbowX, y: leftElbowY },
+        rightElbow: { x: rightElbowX, y: rightElbowY },
+        leftWrist: { x: leftWristX, y: leftWristY },
+        rightWrist: { x: rightWristX, y: rightWristY },
+        leftHip: { x: leftHipX, y: hipY },
+        rightHip: { x: rightHipX, y: hipY },
+        leftKnee: { x: leftKneeX, y: leftKneeY },
+        rightKnee: { x: rightKneeX, y: rightKneeY },
+        leftAnkle: { x: leftAnkleX, y: leftAnkleY },
+        rightAnkle: { x: rightAnkleX, y: rightAnkleY },
+        scale: scale
+      };
+    }
+
+    // ==========================================
+    // ARMOR ART RENDERERS
+    // ==========================================
+    function drawDarkKnight(ctx, pose, time, scanCutoff) {
+      const t = time * 0.001;
+      const { nose, leftShoulder, rightShoulder, leftElbow, rightElbow, leftWrist, rightWrist, leftHip, rightHip, leftKnee, rightKnee, leftAnkle, rightAnkle, scale } = pose;
+
+      const chestX = (leftShoulder.x + rightShoulder.x) * 0.5;
+      const chestY = (leftShoulder.y + leftHip.y) * 0.5;
+      const hipMidX = (leftHip.x + rightHip.x) * 0.5;
+      const hipMidY = (leftHip.y + rightHip.y) * 0.5;
+
+      // 1. Flowing Midnight Cape (behind torso)
+      if (shoulderYCutoff(leftShoulder.y, scanCutoff)) {
+        ctx.save();
+        ctx.fillStyle = '#0f1117';
+        ctx.beginPath();
+        ctx.moveTo(leftShoulder.x - 10, leftShoulder.y);
+        ctx.lineTo(rightShoulder.x + 10, rightShoulder.y);
+
+        const capeBottomY = leftAnkle.y - 20;
+        const wave1 = Math.sin(t * 3) * 20;
+        const wave2 = Math.cos(t * 2.5) * 25;
+
+        ctx.quadraticCurveTo(rightShoulder.x + 50 + wave1, hipMidY + 50, rightShoulder.x + 60 + wave2, capeBottomY);
+        ctx.lineTo(leftShoulder.x - 60 + wave1, capeBottomY);
+        ctx.quadraticCurveTo(leftShoulder.x - 50 + wave2, hipMidY + 50, leftShoulder.x - 10, leftShoulder.y);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.strokeStyle = '#2d3342';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      // 2. Gothic Greatsword on Back
+      if (nose.y >= scanCutoff) {
+        ctx.save();
+        ctx.translate(chestX + 25, chestY - 40);
+        ctx.rotate(-0.4);
+        ctx.fillStyle = '#e2e8f0';
+        ctx.fillRect(-6, -scale * 0.45, 12, scale * 0.5);
+        ctx.fillStyle = '#1e293b';
+        ctx.fillRect(-2, -scale * 0.42, 4, scale * 0.45);
+        ctx.fillStyle = '#475569';
+        ctx.fillRect(-25, scale * 0.05, 50, 10);
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(-4, scale * 0.07, 8, 30);
+        ctx.beginPath();
+        ctx.arc(0, scale * 0.07 + 34, 7, 0, Math.PI * 2);
+        ctx.fillStyle = '#ffb300';
+        ctx.fill();
+        ctx.restore();
+      }
+
+      // 3. Leg Greaves & Sabatons
+      drawLimbSegment(ctx, leftKnee, leftAnkle, 18, '#1e222d', '#94a3b8', scanCutoff);
+      drawLimbSegment(ctx, rightKnee, rightAnkle, 18, '#1e222d', '#94a3b8', scanCutoff);
+      drawLimbSegment(ctx, leftHip, leftKnee, 22, '#181b24', '#64748b', scanCutoff);
+      drawLimbSegment(ctx, rightHip, rightKnee, 22, '#181b24', '#64748b', scanCutoff);
+
+      // 4. Gothic Cuirass & Faulds (Chestplate)
+      if (chestY >= scanCutoff) {
+        ctx.save();
+        const grad = ctx.createLinearGradient(leftShoulder.x, leftShoulder.y, rightShoulder.x, hipMidY);
+        grad.addColorStop(0, '#334155');
+        grad.addColorStop(0.5, '#0f172a');
+        grad.addColorStop(1, '#1e293b');
+
+        ctx.fillStyle = grad;
+        ctx.strokeStyle = '#94a3b8';
+        ctx.lineWidth = 3;
+
+        ctx.beginPath();
+        ctx.moveTo(leftShoulder.x, leftShoulder.y);
+        ctx.lineTo(rightShoulder.x, rightShoulder.y);
+        ctx.lineTo(rightHip.x + 10, rightHip.y);
+        ctx.lineTo(hipMidX, hipMidY + 25);
+        ctx.lineTo(leftHip.x - 10, leftHip.y);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.moveTo(chestX, leftShoulder.y);
+        ctx.lineTo(chestX, hipMidY + 20);
+        ctx.strokeStyle = '#e2e8f0';
+        ctx.lineWidth = 4;
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.arc(chestX, chestY - 10, 14, 0, Math.PI * 2);
+        ctx.strokeStyle = '#f59e0b';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      // 5. Spiked Multi-tiered Pauldrons
+      if (leftShoulder.y >= scanCutoff) {
+        drawSpikedPauldron(ctx, leftShoulder.x, leftShoulder.y, -1);
+        drawSpikedPauldron(ctx, rightShoulder.x, rightShoulder.y, 1);
+      }
+
+      // 6. Arm Vambraces & Gauntlets
+      drawLimbSegment(ctx, leftShoulder, leftElbow, 16, '#1e222d', '#94a3b8', scanCutoff);
+      drawLimbSegment(ctx, rightShoulder, rightElbow, 16, '#1e222d', '#94a3b8', scanCutoff);
+      drawLimbSegment(ctx, leftElbow, leftWrist, 14, '#334155', '#e2e8f0', scanCutoff);
+      drawLimbSegment(ctx, rightElbow, rightWrist, 14, '#334155', '#e2e8f0', scanCutoff);
+
+      // 7. Dark Midnight Cowl & Gothic Helmet
+      if (nose.y >= scanCutoff) {
+        ctx.save();
+        const headRadius = scale * 0.11;
+
+        ctx.fillStyle = '#0f1117';
+        ctx.beginPath();
+        ctx.moveTo(nose.x - headRadius * 1.3, nose.y + headRadius * 0.8);
+        ctx.lineTo(nose.x, nose.y - headRadius * 1.55);
+        ctx.lineTo(nose.x + headRadius * 1.3, nose.y + headRadius * 0.8);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = '#334155';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        ctx.fillStyle = '#1e293b';
+        ctx.beginPath();
+        ctx.arc(nose.x, nose.y, headRadius * 0.85, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = '#000';
+        ctx.fillRect(nose.x - headRadius * 0.6, nose.y - 6, headRadius * 1.2, 10);
+
+        ctx.fillStyle = '#fbbf24';
+        ctx.shadowColor = '#f59e0b';
+        ctx.shadowBlur = 12;
+        ctx.fillRect(nose.x - headRadius * 0.45, nose.y - 3, headRadius * 0.35, 4);
+        ctx.fillRect(nose.x + headRadius * 0.1, nose.y - 3, headRadius * 0.35, 4);
+        ctx.restore();
+      }
+    }
+
+    function drawSpikedPauldron(ctx, x, y, dir) {
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.fillStyle = '#1e293b';
+      ctx.strokeStyle = '#94a3b8';
+      ctx.lineWidth = 2.5;
+
+      ctx.beginPath();
+      ctx.moveTo(-15 * dir, -10);
+      ctx.lineTo(35 * dir, -18);
+      ctx.lineTo(48 * dir, 5);
+      ctx.lineTo(10 * dir, 20);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(25 * dir, -15);
+      ctx.lineTo(55 * dir, -35);
+      ctx.lineTo(40 * dir, -10);
+      ctx.fillStyle = '#cbd5e1';
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.restore();
+    }
+
+    function drawCyberKnight(ctx, pose, time, scanCutoff) {
+      const t = time * 0.001;
+      const { nose, leftShoulder, rightShoulder, leftElbow, rightElbow, leftWrist, rightWrist, leftHip, rightHip, leftKnee, rightKnee, leftAnkle, rightAnkle, scale } = pose;
+
+      const chestX = (leftShoulder.x + rightShoulder.x) * 0.5;
+      const chestY = (leftShoulder.y + leftHip.y) * 0.5;
+      const hipMidX = (leftHip.x + rightHip.x) * 0.5;
+      const hipMidY = (leftHip.y + rightHip.y) * 0.5;
+
+      drawCyberLimb(ctx, leftKnee, leftAnkle, 20, scanCutoff, t);
+      drawCyberLimb(ctx, rightKnee, rightAnkle, 20, scanCutoff, t);
+      drawCyberLimb(ctx, leftHip, leftKnee, 24, scanCutoff, t);
+      drawCyberLimb(ctx, rightHip, rightKnee, 24, scanCutoff, t);
+
+      if (chestY >= scanCutoff) {
+        ctx.save();
+        ctx.fillStyle = '#f8fafc';
+        ctx.strokeStyle = '#00e5ff';
+        ctx.lineWidth = 2;
+        ctx.shadowColor = 'rgba(0, 229, 255, 0.4)';
+        ctx.shadowBlur = 8;
+
+        ctx.beginPath();
+        ctx.moveTo(leftShoulder.x - 5, leftShoulder.y);
+        ctx.lineTo(rightShoulder.x + 5, rightShoulder.y);
+        ctx.lineTo(rightHip.x + 8, rightHip.y);
+        ctx.lineTo(hipMidX, hipMidY + 15);
+        ctx.lineTo(leftHip.x - 8, leftHip.y);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = '#0f172a';
+        ctx.beginPath();
+        ctx.moveTo(chestX - 25, chestY - 15);
+        ctx.lineTo(chestX + 25, chestY - 15);
+        ctx.lineTo(chestX + 15, chestY + 25);
+        ctx.lineTo(chestX - 15, chestY + 25);
+        ctx.closePath();
+        ctx.fill();
+
+        const pulse = 1 + Math.sin(t * 6) * 0.15;
+        const reactorRadius = 16 * pulse;
+
+        ctx.beginPath();
+        ctx.arc(chestX, chestY - 5, reactorRadius, 0, Math.PI * 2);
+        ctx.fillStyle = '#00e5ff';
+        ctx.shadowColor = '#00e5ff';
+        ctx.shadowBlur = 24;
+        ctx.fill();
+
+        ctx.beginPath();
+        ctx.arc(chestX, chestY - 5, reactorRadius * 0.5, 0, Math.PI * 2);
+        ctx.fillStyle = '#ffffff';
+        ctx.fill();
+
+        ctx.beginPath();
+        ctx.moveTo(chestX, chestY - 5);
+        ctx.lineTo(leftShoulder.x, leftShoulder.y);
+        ctx.moveTo(chestX, chestY - 5);
+        ctx.lineTo(rightShoulder.x, rightShoulder.y);
+        ctx.strokeStyle = '#00e5ff';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        ctx.restore();
+      }
+
+      if (leftShoulder.y >= scanCutoff) {
+        drawCyberPauldron(ctx, leftShoulder.x, leftShoulder.y, -1, t);
+        drawCyberPauldron(ctx, rightShoulder.x, rightShoulder.y, 1, t);
+      }
+
+      drawCyberLimb(ctx, leftShoulder, leftElbow, 18, scanCutoff, t);
+      drawCyberLimb(ctx, rightShoulder, rightElbow, 18, scanCutoff, t);
+      drawCyberLimb(ctx, leftElbow, leftWrist, 16, scanCutoff, t);
+      drawCyberLimb(ctx, rightElbow, rightWrist, 16, scanCutoff, t);
+
+      if (nose.y >= scanCutoff) {
+        ctx.save();
+        const headRadius = scale * 0.11;
+
+        ctx.fillStyle = '#f8fafc';
+        ctx.strokeStyle = '#00e5ff';
+        ctx.lineWidth = 2.5;
+        ctx.shadowColor = '#00e5ff';
+        ctx.shadowBlur = 10;
+
+        ctx.beginPath();
+        ctx.arc(nose.x, nose.y, headRadius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(nose.x - headRadius - 8, nose.y - 12, 10, 24);
+        ctx.fillRect(nose.x + headRadius - 2, nose.y - 12, 10, 24);
+
+        ctx.shadowColor = '#00e5ff';
+        ctx.shadowBlur = 18;
+        ctx.fillStyle = '#00e5ff';
+
+        ctx.beginPath();
+        ctx.moveTo(nose.x - headRadius * 0.65, nose.y - 10);
+        ctx.lineTo(nose.x, nose.y + 12);
+        ctx.lineTo(nose.x + headRadius * 0.65, nose.y - 10);
+        ctx.lineTo(nose.x + headRadius * 0.5, nose.y - 16);
+        ctx.lineTo(nose.x, nose.y + 4);
+        ctx.lineTo(nose.x - headRadius * 0.5, nose.y - 16);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(nose.x, nose.y + 4, 3, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.restore();
+      }
+    }
+
+    function drawCyberPauldron(ctx, x, y, dir, t) {
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.fillStyle = '#f8fafc';
+      ctx.strokeStyle = '#00e5ff';
+      ctx.lineWidth = 2;
+      ctx.shadowColor = '#00e5ff';
+      ctx.shadowBlur = 10;
+
+      ctx.beginPath();
+      ctx.moveTo(-10 * dir, -12);
+      ctx.lineTo(40 * dir, -22);
+      ctx.lineTo(48 * dir, 12);
+      ctx.lineTo(10 * dir, 18);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = '#00e5ff';
+      ctx.fillRect(20 * dir, -12, 16 * dir, 4);
+
+      ctx.restore();
+    }
+
+    function drawCyberLimb(ctx, p1, p2, width, scanCutoff, t) {
+      if (Math.min(p1.y, p2.y) < scanCutoff && Math.max(p1.y, p2.y) < scanCutoff) return;
+      ctx.save();
+      const dx = p2.x - p1.x;
+      const dy = p2.y - p1.y;
+      const angle = Math.atan2(dy, dx);
+      const dist = Math.hypot(dx, dy);
+
+      ctx.translate(p1.x, p1.y);
+      ctx.rotate(angle);
+
+      ctx.fillStyle = '#f8fafc';
+      ctx.strokeStyle = '#00e5ff';
+      ctx.lineWidth = 2;
+      ctx.shadowColor = 'rgba(0, 229, 255, 0.4)';
+      ctx.shadowBlur = 6;
+      ctx.fillRect(5, -width * 0.5, dist - 10, width);
+      ctx.strokeRect(5, -width * 0.5, dist - 10, width);
+
+      ctx.strokeStyle = '#00e5ff';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(10, 0);
+      ctx.lineTo(dist - 10, 0);
+      ctx.stroke();
+
+      ctx.restore();
+    }
+
+    function drawLimbSegment(ctx, p1, p2, width, fill, stroke, scanCutoff) {
+      if (Math.min(p1.y, p2.y) < scanCutoff && Math.max(p1.y, p2.y) < scanCutoff) return;
+      ctx.save();
+      const dx = p2.x - p1.x;
+      const dy = p2.y - p1.y;
+      const angle = Math.atan2(dy, dx);
+      const dist = Math.hypot(dx, dy);
+
+      ctx.translate(p1.x, p1.y);
+      ctx.rotate(angle);
+
+      ctx.fillStyle = fill;
+      ctx.strokeStyle = stroke;
+      ctx.lineWidth = 2;
+      ctx.fillRect(4, -width * 0.5, dist - 8, width);
+      ctx.strokeRect(4, -width * 0.5, dist - 8, width);
+
+      ctx.restore();
+    }
+
+    function shoulderYCutoff(y, scanCutoff) {
+      return y >= scanCutoff - 50;
+    }
+
+    // ==========================================
+    // MAIN RENDER LOOP
+    // ==========================================
+    let lastFpsTime = performance.now();
+    let frameCount = 0;
+    let currentFps = 60;
+
+    function renderLoop(now) {
+      frameCount++;
+      if (now - lastFpsTime >= 1000) {
+        currentFps = frameCount;
+        frameCount = 0;
+        lastFpsTime = now;
+      }
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      if (cameraActive && video.readyState >= 2) {
+        ctx.save();
+        ctx.translate(canvas.width, 0);
+        ctx.scale(-1, 1);
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        ctx.restore();
+
+        ctx.fillStyle = 'rgba(7, 10, 18, 0.45)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+      } else {
+        const grad = ctx.createRadialGradient(
+          canvas.width * 0.5, canvas.height * 0.5, 40,
+          canvas.width * 0.5, canvas.height * 0.5, canvas.width * 0.8
+        );
+        grad.addColorStop(0, '#101626');
+        grad.addColorStop(1, '#05070c');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        ctx.save();
+        ctx.strokeStyle = 'rgba(0, 229, 255, 0.12)';
+        ctx.lineWidth = 1;
+        const gridY = canvas.height * 0.76;
+        for (let i = -10; i <= 10; i++) {
+          ctx.beginPath();
+          ctx.moveTo(canvas.width * 0.5 + i * 40, gridY);
+          ctx.lineTo(canvas.width * 0.5 + i * 160, canvas.height);
+          ctx.stroke();
+        }
+        for (let y = gridY; y <= canvas.height; y += 22) {
+          ctx.beginPath();
+          ctx.moveTo(0, y);
+          ctx.lineTo(canvas.width, y);
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+
+      const pose = getSimulatedPose(now);
+
+      let scanCutoffY = 0;
+      if (isEquipping) {
+        const elapsed = now - scanStartTime;
+        const progress = Math.min(1.0, elapsed / SCAN_DURATION);
+        const feetY = pose.leftAnkle.y + 40;
+        const headTopY = pose.nose.y - pose.scale * 0.2;
+        scanCutoffY = feetY - (feetY - headTopY) * progress;
+
+        const scanLine = document.getElementById('scanLine');
+        scanLine.style.top = scanCutoffY + 'px';
+
+        ctx.save();
+        ctx.fillStyle = armors[currentArmorIndex].id === 'cyber_knight' ? 'rgba(0, 229, 255, 0.2)' : 'rgba(255, 179, 0, 0.2)';
+        ctx.fillRect(0, scanCutoffY, canvas.width, canvas.height - scanCutoffY);
+
+        ctx.strokeStyle = armors[currentArmorIndex].id === 'cyber_knight' ? '#00e5ff' : '#ffb300';
+        ctx.shadowColor = ctx.strokeStyle;
+        ctx.shadowBlur = 20;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(0, scanCutoffY);
+        ctx.lineTo(canvas.width, scanCutoffY);
+        ctx.stroke();
+        ctx.restore();
+
+        if (progress >= 1.0) {
+          isEquipping = false;
+          document.getElementById('scan-overlay').style.display = 'none';
+        }
+      }
+
+      const currentArmor = armors[currentArmorIndex];
+      if (currentArmor.id === 'dark_knight') {
+        drawDarkKnight(ctx, pose, now, scanCutoffY);
+      } else {
+        drawCyberKnight(ctx, pose, now, scanCutoffY);
+      }
+
+      requestAnimationFrame(renderLoop);
+    }
+
+    requestAnimationFrame(renderLoop);
+
+    // ==========================================
+    // USER CONTROLS & INTERACTION
+    // ==========================================
+    const btnEquip = document.getElementById('btnEquip');
+    const btnPrev = document.getElementById('btnPrevArmor');
+    const btnNext = document.getElementById('btnNextArmor');
+    const armorName = document.getElementById('armorName');
+    const armorSubtitle = document.getElementById('armorSubtitle');
+    const equipText = document.getElementById('equipText');
+    const statDef = document.getElementById('statDef');
+    const statAgi = document.getElementById('statAgi');
+    const statPwr = document.getElementById('statPwr');
+    const barDef = document.getElementById('barDef');
+    const barAgi = document.getElementById('barAgi');
+    const barPwr = document.getElementById('barPwr');
+    const btnToggleCam = document.getElementById('btnToggleCam');
+    const statusText = document.getElementById('statusText');
+    const btnPoseMode = document.getElementById('btnPoseMode');
+    const poseModeLabel = document.getElementById('poseModeLabel');
+    const btnAudioToggle = document.getElementById('btnAudioToggle');
+    const audioLabel = document.getElementById('audioLabel');
+    const btnSnapshot = document.getElementById('btnSnapshot');
+    const btnInfo = document.getElementById('btnInfo');
+    const infoModal = document.getElementById('infoModal');
+    const btnCloseModal = document.getElementById('btnCloseModal');
+
+    function updateArmorUI() {
+      const a = armors[currentArmorIndex];
+      armorName.textContent = a.name;
+      armorName.style.color = a.id === 'cyber_knight' ? '#00e5ff' : '#ffffff';
+      armorSubtitle.textContent = a.subtitle;
+      equipText.textContent = 'EQUIP ' + a.name;
+
+      statDef.textContent = a.def + '%';
+      statAgi.textContent = a.agi + '%';
+      statPwr.textContent = a.pwr + '%';
+      barDef.style.width = a.def + '%';
+      barAgi.style.width = a.agi + '%';
+      barPwr.style.width = a.pwr + '%';
+
+      if (a.id === 'cyber_knight') {
+        btnEquip.classList.remove('dark-theme-equip');
+      } else {
+        btnEquip.classList.add('dark-theme-equip');
+      }
+      playSound('click');
+    }
+
+    btnPrev.addEventListener('click', () => {
+      currentArmorIndex = (currentArmorIndex - 1 + armors.length) % armors.length;
+      updateArmorUI();
+    });
+
+    btnNext.addEventListener('click', () => {
+      currentArmorIndex = (currentArmorIndex + 1) % armors.length;
+      updateArmorUI();
+    });
+
+    btnEquip.addEventListener('click', () => {
+      isEquipping = true;
+      scanStartTime = performance.now();
+      document.getElementById('scan-overlay').style.display = 'block';
+      playSound('equip');
+    });
+
+    btnPoseMode.addEventListener('click', () => {
+      poseModeIndex = (poseModeIndex + 1) % poseModes.length;
+      poseModeLabel.textContent = 'STANCE: ' + poseModes[poseModeIndex];
+      playSound('click');
+    });
+
+    btnAudioToggle.addEventListener('click', () => {
+      soundEnabled = !soundEnabled;
+      audioLabel.textContent = soundEnabled ? 'FX SOUND: ON' : 'FX SOUND: OFF';
+      playSound('click');
+    });
+
+    btnToggleCam.addEventListener('click', async () => {
+      playSound('click');
+      if (cameraActive) {
+        if (video.srcObject) {
+          video.srcObject.getTracks().forEach(track => track.stop());
+        }
+        cameraActive = false;
+        statusText.textContent = 'SIMULATOR ACTIVE';
+        btnToggleCam.style.color = 'var(--cyan)';
+      } else {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({
+            video: {
+              facingMode: 'user',
+              width: { ideal: 1280 },
+              height: { ideal: 720 }
+            }
+          });
+          video.srcObject = stream;
+          video.play();
+          cameraActive = true;
+          statusText.textContent = 'LIVE WEBCAM AR';
+          btnToggleCam.style.color = '#10b981';
+        } catch (err) {
+          console.warn('Camera access error:', err);
+          alert('Camera permission denied or camera not found. Continuing with Virtual Pose Simulator!');
+        }
+      }
+    });
+
+    btnSnapshot.addEventListener('click', () => {
+      playSound('click');
+      const dataUrl = canvas.toDataURL('image/png');
+      const a = document.createElement('a');
+      a.href = dataUrl;
+      a.download = `ar_${armors[currentArmorIndex].id}_snapshot.png`;
+      a.click();
+    });
+
+    btnInfo.addEventListener('click', () => {
+      infoModal.style.display = 'flex';
+      playSound('click');
+    });
+
+    btnCloseModal.addEventListener('click', () => {
+      infoModal.style.display = 'none';
+      playSound('click');
+    });
+  </script>
+</body>
+</html>

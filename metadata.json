@@ -1,6 +1,6 @@
 {
   "name": "AR Armor",
-  "description": "Real-time front camera AR body tracking armor overlay with Dark Knight and Cyber Knight sets.",
+  "description": "Real-time AR body tracking armor web & mobile app featuring Dark Knight and Cyber Knight sets with live camera tracking and interactive simulator.",
   "requestFramePermissions": [
     "android.permission.CAMERA"
   ],
