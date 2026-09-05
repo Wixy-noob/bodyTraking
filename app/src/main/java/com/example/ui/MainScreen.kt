@@ -166,6 +166,10 @@ fun MainScreen() {
     val scanAnimatable = remember { Animatable(0f) }
     var scanNotificationText by remember { mutableStateOf<String?>(null) }
 
+    // Auto-Equip on Body Detection States
+    var autoEquipEnabled by remember { mutableStateOf(true) }
+    var hasAutoEquippedThisPresence by remember { mutableStateOf(false) }
+
     // Pulse timer for glowing emissive shaders
     val infiniteTransition = rememberInfiniteTransition(label = "pulse_time")
     val pulseTime by infiniteTransition.animateFloat(
@@ -188,20 +192,34 @@ fun MainScreen() {
         coroutineScope.launch {
             isEquipScanning = true
             scanAnimatable.snapTo(0f)
-            scanNotificationText = "SCANNING BODY: ${armor.name}"
+            scanNotificationText = "⚡ DETEKSI TUBUH: AUTO-EQUIP ${armor.name.uppercase()}"
 
             // 1. Scanning effect moves from feet to head
             scanAnimatable.animateTo(
                 targetValue = 1.0f,
-                animationSpec = tween(durationMillis = 1800, easing = FastOutSlowInEasing)
+                animationSpec = tween(durationMillis = 1600, easing = FastOutSlowInEasing)
             )
 
-            // 2. Lock armor solid
+            // 2. Lock armor solid to body
             isEquipScanning = false
             isEquipped = true
-            scanNotificationText = "ARMOR EQUIPPED: ${armor.name}"
-            delay(2200)
+            scanNotificationText = "✅ ARMOR RIGGED TO BODY • ${armor.name.uppercase()}"
+            delay(2400)
             scanNotificationText = null
+        }
+    }
+
+    // Auto-Equip watcher: automatically equips armor when a person/body is detected
+    LaunchedEffect(activePose.isDetected, autoEquipEnabled) {
+        if (activePose.isDetected) {
+            if (autoEquipEnabled && !hasAutoEquippedThisPresence) {
+                hasAutoEquippedThisPresence = true
+                val targetArmor = equippedArmor ?: allArmors[selectedArmorIndex]
+                startEquipScan(targetArmor)
+            }
+        } else {
+            // When body leaves camera frame, reset flag so next time user enters frame, auto-equip re-triggers!
+            hasAutoEquippedThisPresence = false
         }
     }
 
@@ -371,6 +389,19 @@ fun MainScreen() {
         }
 
         // -------------------------------------------------------------
+        // CENTER RETICLE: Body Detection & Alignment Guide
+        // -------------------------------------------------------------
+        if (!activePose.isDetected) {
+            BodyTargetingReticle(
+                isDetected = false,
+                autoEquipEnabled = autoEquipEnabled,
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .padding(horizontal = 24.dp)
+            )
+        }
+
+        // -------------------------------------------------------------
         // BOTTOM HUD LAYER: Controls Toolbar
         // -------------------------------------------------------------
         Box(
@@ -386,6 +417,15 @@ fun MainScreen() {
                         permissionLauncher.launch(Manifest.permission.CAMERA)
                     }
                     isDemoMode = !isDemoMode
+                },
+                autoEquipEnabled = autoEquipEnabled,
+                onToggleAutoEquip = {
+                    autoEquipEnabled = !autoEquipEnabled
+                    scanNotificationText = if (autoEquipEnabled) "⚡ AUTO-EQUIP: AKTIF" else "AUTO-EQUIP: NONAKTIF"
+                    coroutineScope.launch {
+                        delay(1500)
+                        scanNotificationText = null
+                    }
                 },
                 showSkeleton = showSkeletonDebug,
                 onToggleSkeleton = { showSkeletonDebug = !showSkeletonDebug },

@@ -97,6 +97,25 @@ class ArmorRenderer {
         }
 
         // -------------------------------------------------------------
+        // LAYER 1.5: Anatomical Compression Undersuit / Arming Doublet
+        // Hugs real body proportions between joints so it looks like authentic wearable armor
+        // -------------------------------------------------------------
+        renderAnatomicalUndersuit(
+            drawScope = drawScope,
+            pose = pose,
+            lShoulder = lShoulder,
+            rShoulder = rShoulder,
+            lHip = lHip,
+            rHip = rHip,
+            shoulderDist = shoulderDist,
+            torsoLength = torsoLength,
+            scale = scaleRef,
+            armor = armor,
+            time = pulseTime,
+            isPartMaterialized = ::isPartMaterialized
+        )
+
+        // -------------------------------------------------------------
         // LAYER 2: Lower Body (Legs: Thighs, Knees, Calves, Boots)
         // -------------------------------------------------------------
         if (pose.leftKnee.isValid() && pose.leftAnkle.isValid()) {
@@ -153,6 +172,18 @@ class ArmorRenderer {
                 pulseTime,
                 isPartAtScanFront(midShoulder.y)
             )
+            // Neck Gorget connects chestplate firmly to the helmet
+            val headPosForNeck = pose.headCenter.toOffset(width, height)
+            renderGorgetNeckArmor(
+                drawScope,
+                midShoulder,
+                headPosForNeck,
+                shoulderDist,
+                scaleRef,
+                armor,
+                pulseTime,
+                isPartAtScanFront(midShoulder.y)
+            )
         }
 
         // -------------------------------------------------------------
@@ -162,6 +193,7 @@ class ArmorRenderer {
             val lElbow = pose.leftElbow.toOffset(width, height)
             if (isPartMaterialized(lElbow.y)) {
                 renderLimbSegment(drawScope, lShoulder, lElbow, scaleRef * 0.75f, armor, pulseTime, isPartAtScanFront(lElbow.y))
+                renderCouterElbowGuard(drawScope, lElbow, scaleRef * 0.72f, armor, pulseTime, isPartAtScanFront(lElbow.y))
             }
 
             if (pose.leftWrist.isValid()) {
@@ -177,6 +209,7 @@ class ArmorRenderer {
             val rElbow = pose.rightElbow.toOffset(width, height)
             if (isPartMaterialized(rElbow.y)) {
                 renderLimbSegment(drawScope, rShoulder, rElbow, scaleRef * 0.75f, armor, pulseTime, isPartAtScanFront(rElbow.y))
+                renderCouterElbowGuard(drawScope, rElbow, scaleRef * 0.72f, armor, pulseTime, isPartAtScanFront(rElbow.y))
             }
 
             if (pose.rightWrist.isValid()) {
@@ -1224,6 +1257,215 @@ class ArmorRenderer {
                 color = Color.White,
                 radius = 2.5f,
                 center = Offset(sparkX, sparkY)
+            )
+        }
+    }
+
+    // -----------------------------------------------------------------
+    // ANATOMICAL WEARABLE FIT HELPERS ("Kayak pake armor asli")
+    // -----------------------------------------------------------------
+
+    private fun renderAnatomicalUndersuit(
+        drawScope: DrawScope,
+        pose: PoseData,
+        lShoulder: Offset,
+        rShoulder: Offset,
+        lHip: Offset,
+        rHip: Offset,
+        shoulderDist: Float,
+        torsoLength: Float,
+        scale: Float,
+        armor: ArmorDefinition,
+        time: Float,
+        isPartMaterialized: (Float) -> Boolean
+    ) {
+        val width = drawScope.size.width
+        val height = drawScope.size.height
+
+        val undersuitColor = if (armor.type == ArmorType.CYBER_KNIGHT) {
+            Color(0xFF0D1424) // High-tech nano-mesh under-chassis
+        } else {
+            Color(0xFF10141D) // Medieval arming doublet & chainmail weave
+        }
+        val seamColor = if (armor.type == ArmorType.CYBER_KNIGHT) {
+            armor.emissiveColor.copy(alpha = 0.28f)
+        } else {
+            Color(0xFF2C3545)
+        }
+
+        val fillPaint = Paint().apply {
+            isAntiAlias = true
+            style = Paint.Style.FILL
+            color = undersuitColor.toArgb()
+        }
+        val seamPaint = Paint().apply {
+            isAntiAlias = true
+            style = Paint.Style.STROKE
+            strokeWidth = 2.5f * scale
+            color = seamColor.toArgb()
+        }
+
+        // 1. Torso body-glove
+        val midShoulder = (lShoulder + rShoulder) * 0.5f
+        if (isPartMaterialized(midShoulder.y)) {
+            val torsoPath = Path().apply {
+                moveTo(lShoulder.x - 12f * scale, lShoulder.y)
+                lineTo(rShoulder.x + 12f * scale, rShoulder.y)
+                lineTo(rHip.x + 14f * scale, rHip.y)
+                lineTo(lHip.x - 14f * scale, lHip.y)
+                close()
+            }
+            drawScope.drawContext.canvas.nativeCanvas.drawPath(torsoPath, fillPaint)
+            drawScope.drawContext.canvas.nativeCanvas.drawPath(torsoPath, seamPaint)
+        }
+
+        // 2. Arms undersuit sleeves
+        if (pose.leftElbow.isValid() && isPartMaterialized(lShoulder.y)) {
+            val lElbow = pose.leftElbow.toOffset(width, height)
+            drawUndersuitLimb(drawScope, lShoulder, lElbow, 34f * scale, fillPaint, seamPaint)
+            if (pose.leftWrist.isValid() && isPartMaterialized(lElbow.y)) {
+                val lWrist = pose.leftWrist.toOffset(width, height)
+                drawUndersuitLimb(drawScope, lElbow, lWrist, 26f * scale, fillPaint, seamPaint)
+            }
+        }
+        if (pose.rightElbow.isValid() && isPartMaterialized(rShoulder.y)) {
+            val rElbow = pose.rightElbow.toOffset(width, height)
+            drawUndersuitLimb(drawScope, rShoulder, rElbow, 34f * scale, fillPaint, seamPaint)
+            if (pose.rightWrist.isValid() && isPartMaterialized(rElbow.y)) {
+                val rWrist = pose.rightWrist.toOffset(width, height)
+                drawUndersuitLimb(drawScope, rElbow, rWrist, 26f * scale, fillPaint, seamPaint)
+            }
+        }
+
+        // 3. Legs undersuit
+        if (pose.leftKnee.isValid() && isPartMaterialized(lHip.y)) {
+            val lKnee = pose.leftKnee.toOffset(width, height)
+            drawUndersuitLimb(drawScope, lHip, lKnee, 40f * scale, fillPaint, seamPaint)
+            if (pose.leftAnkle.isValid() && isPartMaterialized(lKnee.y)) {
+                val lAnkle = pose.leftAnkle.toOffset(width, height)
+                drawUndersuitLimb(drawScope, lKnee, lAnkle, 32f * scale, fillPaint, seamPaint)
+            }
+        }
+        if (pose.rightKnee.isValid() && isPartMaterialized(rHip.y)) {
+            val rKnee = pose.rightKnee.toOffset(width, height)
+            drawUndersuitLimb(drawScope, rHip, rKnee, 40f * scale, fillPaint, seamPaint)
+            if (pose.rightAnkle.isValid() && isPartMaterialized(rKnee.y)) {
+                val rAnkle = pose.rightAnkle.toOffset(width, height)
+                drawUndersuitLimb(drawScope, rKnee, rAnkle, 32f * scale, fillPaint, seamPaint)
+            }
+        }
+    }
+
+    private fun drawUndersuitLimb(
+        drawScope: DrawScope,
+        p1: Offset,
+        p2: Offset,
+        thickness: Float,
+        fillPaint: Paint,
+        strokePaint: Paint
+    ) {
+        val dist = (p2 - p1).getDistance()
+        if (dist < 10f) return
+        val angle = Math.toDegrees(atan2((p2.y - p1.y).toDouble(), (p2.x - p1.x).toDouble())).toFloat() - 90f
+        val mid = (p1 + p2) * 0.5f
+
+        drawScope.rotate(degrees = angle, pivot = mid) {
+            val halfW = thickness * 0.5f
+            val halfH = dist * 0.52f
+            val path = Path().apply {
+                moveTo(mid.x - halfW, mid.y - halfH)
+                lineTo(mid.x + halfW, mid.y - halfH)
+                lineTo(mid.x + halfW * 0.85f, mid.y + halfH)
+                lineTo(mid.x - halfW * 0.85f, mid.y + halfH)
+                close()
+            }
+            drawScope.drawContext.canvas.nativeCanvas.drawPath(path, fillPaint)
+            drawScope.drawContext.canvas.nativeCanvas.drawPath(path, strokePaint)
+        }
+    }
+
+    private fun renderGorgetNeckArmor(
+        drawScope: DrawScope,
+        midShoulder: Offset,
+        headPos: Offset,
+        shoulderDist: Float,
+        scale: Float,
+        armor: ArmorDefinition,
+        time: Float,
+        isHologram: Boolean
+    ) {
+        val neckCenter = midShoulder + (headPos - midShoulder) * 0.45f
+        val neckWidth = shoulderDist * 0.36f
+        val neckHeight = (headPos.y - midShoulder.y).let { if (it < 0) -it * 0.65f else 35f * scale }.coerceIn(25f * scale, 60f * scale)
+
+        val basePaint = Paint().apply {
+            isAntiAlias = true
+            style = Paint.Style.FILL
+            color = if (isHologram) armor.emissiveColor.copy(alpha = 0.5f).toArgb() else armor.primaryColor.toArgb()
+        }
+        val strokePaint = Paint().apply {
+            isAntiAlias = true
+            style = Paint.Style.STROKE
+            strokeWidth = 3f * scale
+            color = if (isHologram) armor.emissiveColor.toArgb() else armor.accentColor.toArgb()
+        }
+
+        // Segmented neck collar / gorget plates
+        val gorgetPath = Path().apply {
+            moveTo(neckCenter.x - neckWidth * 0.5f, neckCenter.y + neckHeight * 0.5f)
+            lineTo(neckCenter.x + neckWidth * 0.5f, neckCenter.y + neckHeight * 0.5f)
+            lineTo(neckCenter.x + neckWidth * 0.38f, neckCenter.y - neckHeight * 0.5f)
+            lineTo(neckCenter.x - neckWidth * 0.38f, neckCenter.y - neckHeight * 0.5f)
+            close()
+        }
+        drawScope.drawContext.canvas.nativeCanvas.drawPath(gorgetPath, basePaint)
+        drawScope.drawContext.canvas.nativeCanvas.drawPath(gorgetPath, strokePaint)
+
+        // Metallic collar ridge line
+        drawScope.drawLine(
+            color = if (isHologram) armor.emissiveColor else Color(0xFF64748B),
+            start = Offset(neckCenter.x - neckWidth * 0.42f, neckCenter.y),
+            end = Offset(neckCenter.x + neckWidth * 0.42f, neckCenter.y),
+            strokeWidth = 2.5f * scale
+        )
+    }
+
+    private fun renderCouterElbowGuard(
+        drawScope: DrawScope,
+        elbow: Offset,
+        scale: Float,
+        armor: ArmorDefinition,
+        time: Float,
+        isHologram: Boolean
+    ) {
+        val radius = 18f * scale
+        val basePaint = Paint().apply {
+            isAntiAlias = true
+            style = Paint.Style.FILL
+            color = if (isHologram) armor.emissiveColor.copy(alpha = 0.5f).toArgb() else armor.secondaryColor.toArgb()
+        }
+        val strokePaint = Paint().apply {
+            isAntiAlias = true
+            style = Paint.Style.STROKE
+            strokeWidth = 2.5f * scale
+            color = if (isHologram) armor.emissiveColor.toArgb() else armor.accentColor.toArgb()
+        }
+
+        val couterPath = Path().apply {
+            moveTo(elbow.x - radius, elbow.y)
+            lineTo(elbow.x, elbow.y - radius * 1.15f)
+            lineTo(elbow.x + radius, elbow.y)
+            lineTo(elbow.x, elbow.y + radius * 1.2f)
+            close()
+        }
+        drawScope.drawContext.canvas.nativeCanvas.drawPath(couterPath, basePaint)
+        drawScope.drawContext.canvas.nativeCanvas.drawPath(couterPath, strokePaint)
+
+        if (armor.type == ArmorType.CYBER_KNIGHT) {
+            drawScope.drawCircle(
+                color = armor.emissiveColor,
+                radius = 4f * scale,
+                center = elbow
             )
         }
     }

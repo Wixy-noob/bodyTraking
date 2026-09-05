@@ -491,6 +491,10 @@
       <div class="bottom-container">
         <!-- Quick toolbar -->
         <div class="quick-toolbar interactive">
+          <button class="pill-btn" id="btnAutoEquip" style="border-color: rgba(0, 229, 255, 0.6); color: #00e5ff;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M11 21h-1l1-7H7.5c-.88 0-.33-.75-.31-.78C8.48 10.94 10.42 7.54 13.01 3h1l-1 7h3.51c.4 0 .62.19.4.66C12.97 17.55 11 21 11 21z"/></svg>
+            <span id="autoEquipLabel">⚡ AUTO: ON</span>
+          </button>
           <button class="pill-btn" id="btnPoseMode">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2c1.1 0 2 .9 2 2s-.9 2-2 2-2-.9-2-2 .9-2 2-2zm9 7h-6v13h-2v-6h-2v6H9V9H3V7h18v2z"/></svg>
             <span id="poseModeLabel">STANCE: IDLE</span>
@@ -705,7 +709,7 @@
       let leftWristY = cy + scale * 0.04;
 
       let rightElbowX = cx + scale * 0.26;
-      rightElbowY = cy - scale * 0.12;
+      let rightElbowY = cy - scale * 0.12;
       let rightWristX = cx + scale * 0.28;
       let rightWristY = cy + scale * 0.04;
 
@@ -781,6 +785,64 @@
     // ==========================================
     // ARMOR ART RENDERERS
     // ==========================================
+    // Wearable Anatomical Fit Helpers ("Kayak pake armor asli")
+    function drawAnatomicalUndersuit(ctx, pose, isCyber, scanCutoff) {
+      const { leftShoulder, rightShoulder, leftElbow, rightElbow, leftWrist, rightWrist, leftHip, rightHip, leftKnee, rightKnee, leftAnkle, rightAnkle, scale } = pose;
+      const baseColor = isCyber ? '#0b1120' : '#0d1017';
+      const seamColor = isCyber ? 'rgba(0, 229, 255, 0.35)' : '#1e293b';
+
+      ctx.save();
+      // 1. Torso body-glove
+      if (leftShoulder.y >= scanCutoff) {
+        ctx.fillStyle = baseColor;
+        ctx.strokeStyle = seamColor;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(leftShoulder.x - 12, leftShoulder.y);
+        ctx.lineTo(rightShoulder.x + 12, rightShoulder.y);
+        ctx.lineTo(rightHip.x + 14, rightHip.y);
+        ctx.lineTo(leftHip.x - 14, leftHip.y);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+      }
+
+      // 2. Arms sleeves
+      drawLimbSegment(ctx, leftShoulder, leftElbow, 24, baseColor, seamColor, scanCutoff);
+      drawLimbSegment(ctx, rightShoulder, rightElbow, 24, baseColor, seamColor, scanCutoff);
+      drawLimbSegment(ctx, leftElbow, leftWrist, 18, baseColor, seamColor, scanCutoff);
+      drawLimbSegment(ctx, rightElbow, rightWrist, 18, baseColor, seamColor, scanCutoff);
+
+      // 3. Legs tights
+      drawLimbSegment(ctx, leftHip, leftKnee, 26, baseColor, seamColor, scanCutoff);
+      drawLimbSegment(ctx, rightHip, rightKnee, 26, baseColor, seamColor, scanCutoff);
+      drawLimbSegment(ctx, leftKnee, leftAnkle, 20, baseColor, seamColor, scanCutoff);
+      drawLimbSegment(ctx, rightKnee, rightAnkle, 20, baseColor, seamColor, scanCutoff);
+      ctx.restore();
+    }
+
+    function drawNeckGorget(ctx, leftShoulder, rightShoulder, nose, isCyber, scanCutoff) {
+      const midShoulderX = (leftShoulder.x + rightShoulder.x) * 0.5;
+      const midShoulderY = (leftShoulder.y + rightShoulder.y) * 0.5;
+      const neckY = midShoulderY - (midShoulderY - nose.y) * 0.45;
+      if (neckY < scanCutoff) return;
+
+      const w = Math.abs(rightShoulder.x - leftShoulder.x) * 0.38;
+      ctx.save();
+      ctx.fillStyle = isCyber ? '#1e293b' : '#1e222d';
+      ctx.strokeStyle = isCyber ? '#00e5ff' : '#94a3b8';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(midShoulderX - w * 0.5, midShoulderY);
+      ctx.lineTo(midShoulderX + w * 0.5, midShoulderY);
+      ctx.lineTo(midShoulderX + w * 0.35, neckY);
+      ctx.lineTo(midShoulderX - w * 0.35, neckY);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+    }
+
     function drawDarkKnight(ctx, pose, time, scanCutoff) {
       const t = time * 0.001;
       const { nose, leftShoulder, rightShoulder, leftElbow, rightElbow, leftWrist, rightWrist, leftHip, rightHip, leftKnee, rightKnee, leftAnkle, rightAnkle, scale } = pose;
@@ -790,6 +852,9 @@
       const hipMidX = (leftHip.x + rightHip.x) * 0.5;
       const hipMidY = (leftHip.y + rightHip.y) * 0.5;
 
+      // 0. Anatomical Under-Armor Compression Suit
+      drawAnatomicalUndersuit(ctx, pose, false, scanCutoff);
+
       // 1. Flowing Midnight Cape (behind torso)
       if (shoulderYCutoff(leftShoulder.y, scanCutoff)) {
         ctx.save();
@@ -798,6 +863,7 @@
         ctx.moveTo(leftShoulder.x - 10, leftShoulder.y);
         ctx.lineTo(rightShoulder.x + 10, rightShoulder.y);
 
+        // Simulated cape bottom ripples
         const capeBottomY = leftAnkle.y - 20;
         const wave1 = Math.sin(t * 3) * 20;
         const wave2 = Math.cos(t * 2.5) * 25;
@@ -819,12 +885,16 @@
         ctx.save();
         ctx.translate(chestX + 25, chestY - 40);
         ctx.rotate(-0.4);
+        // Blade
         ctx.fillStyle = '#e2e8f0';
         ctx.fillRect(-6, -scale * 0.45, 12, scale * 0.5);
+        // Fullers
         ctx.fillStyle = '#1e293b';
         ctx.fillRect(-2, -scale * 0.42, 4, scale * 0.45);
+        // Crossguard
         ctx.fillStyle = '#475569';
         ctx.fillRect(-25, scale * 0.05, 50, 10);
+        // Pommel & Grip
         ctx.fillStyle = '#0f172a';
         ctx.fillRect(-4, scale * 0.07, 8, 30);
         ctx.beginPath();
@@ -843,6 +913,10 @@
       // 4. Gothic Cuirass & Faulds (Chestplate)
       if (chestY >= scanCutoff) {
         ctx.save();
+        const chestWidth = Math.abs(rightShoulder.x - leftShoulder.x) * 1.1;
+        const chestHeight = Math.abs(hipMidY - leftShoulder.y) * 1.1;
+
+        // Dark steel base
         const grad = ctx.createLinearGradient(leftShoulder.x, leftShoulder.y, rightShoulder.x, hipMidY);
         grad.addColorStop(0, '#334155');
         grad.addColorStop(0.5, '#0f172a');
@@ -862,6 +936,7 @@
         ctx.fill();
         ctx.stroke();
 
+        // Center spine ridge
         ctx.beginPath();
         ctx.moveTo(chestX, leftShoulder.y);
         ctx.lineTo(chestX, hipMidY + 20);
@@ -869,6 +944,7 @@
         ctx.lineWidth = 4;
         ctx.stroke();
 
+        // Gold Filigree Accent
         ctx.beginPath();
         ctx.arc(chestX, chestY - 10, 14, 0, Math.PI * 2);
         ctx.strokeStyle = '#f59e0b';
@@ -889,15 +965,19 @@
       drawLimbSegment(ctx, leftElbow, leftWrist, 14, '#334155', '#e2e8f0', scanCutoff);
       drawLimbSegment(ctx, rightElbow, rightWrist, 14, '#334155', '#e2e8f0', scanCutoff);
 
+      // 6.5 Neck Gorget (bridges chest to helmet)
+      drawNeckGorget(ctx, leftShoulder, rightShoulder, nose, false, scanCutoff);
+
       // 7. Dark Midnight Cowl & Gothic Helmet
       if (nose.y >= scanCutoff) {
         ctx.save();
         const headRadius = scale * 0.11;
 
+        // Pointed Cowl Hood
         ctx.fillStyle = '#0f1117';
         ctx.beginPath();
         ctx.moveTo(nose.x - headRadius * 1.3, nose.y + headRadius * 0.8);
-        ctx.lineTo(nose.x, nose.y - headRadius * 1.55);
+        ctx.lineTo(nose.x, nose.y - headRadius * 1.55); // Top point
         ctx.lineTo(nose.x + headRadius * 1.3, nose.y + headRadius * 0.8);
         ctx.closePath();
         ctx.fill();
@@ -905,11 +985,13 @@
         ctx.lineWidth = 2;
         ctx.stroke();
 
+        // Steel face mask & Dark Eye Slit
         ctx.fillStyle = '#1e293b';
         ctx.beginPath();
         ctx.arc(nose.x, nose.y, headRadius * 0.85, 0, Math.PI * 2);
         ctx.fill();
 
+        // Eye slit with glowing crimson/gold embers
         ctx.fillStyle = '#000';
         ctx.fillRect(nose.x - headRadius * 0.6, nose.y - 6, headRadius * 1.2, 10);
 
@@ -929,6 +1011,7 @@
       ctx.strokeStyle = '#94a3b8';
       ctx.lineWidth = 2.5;
 
+      // Tier 1
       ctx.beginPath();
       ctx.moveTo(-15 * dir, -10);
       ctx.lineTo(35 * dir, -18);
@@ -938,6 +1021,7 @@
       ctx.fill();
       ctx.stroke();
 
+      // Sharp Spike
       ctx.beginPath();
       ctx.moveTo(25 * dir, -15);
       ctx.lineTo(55 * dir, -35);
@@ -958,13 +1042,19 @@
       const hipMidX = (leftHip.x + rightHip.x) * 0.5;
       const hipMidY = (leftHip.y + rightHip.y) * 0.5;
 
+      // 0. Anatomical Under-Armor Nano-Compression Suit
+      drawAnatomicalUndersuit(ctx, pose, true, scanCutoff);
+
+      // 1. Ceramic Exosuit Legs with Cyan Conduits
       drawCyberLimb(ctx, leftKnee, leftAnkle, 20, scanCutoff, t);
       drawCyberLimb(ctx, rightKnee, rightAnkle, 20, scanCutoff, t);
       drawCyberLimb(ctx, leftHip, leftKnee, 24, scanCutoff, t);
       drawCyberLimb(ctx, rightHip, rightKnee, 24, scanCutoff, t);
 
+      // 2. Torso Exosuit with Carbon Fiber & Arc Reactor
       if (chestY >= scanCutoff) {
         ctx.save();
+        // Ceramic White Base
         ctx.fillStyle = '#f8fafc';
         ctx.strokeStyle = '#00e5ff';
         ctx.lineWidth = 2;
@@ -981,6 +1071,7 @@
         ctx.fill();
         ctx.stroke();
 
+        // Carbon fiber inner ribs
         ctx.fillStyle = '#0f172a';
         ctx.beginPath();
         ctx.moveTo(chestX - 25, chestY - 15);
@@ -990,6 +1081,7 @@
         ctx.closePath();
         ctx.fill();
 
+        // Pulsing Chest Arc Reactor
         const pulse = 1 + Math.sin(t * 6) * 0.15;
         const reactorRadius = 16 * pulse;
 
@@ -1005,6 +1097,7 @@
         ctx.fillStyle = '#ffffff';
         ctx.fill();
 
+        // Neon energy conduit lines
         ctx.beginPath();
         ctx.moveTo(chestX, chestY - 5);
         ctx.lineTo(leftShoulder.x, leftShoulder.y);
@@ -1017,20 +1110,27 @@
         ctx.restore();
       }
 
+      // 3. Cyber Pauldrons (Aerodynamic Winged Plates)
       if (leftShoulder.y >= scanCutoff) {
         drawCyberPauldron(ctx, leftShoulder.x, leftShoulder.y, -1, t);
         drawCyberPauldron(ctx, rightShoulder.x, rightShoulder.y, 1, t);
       }
 
+      // 4. Arms & Gauntlets
       drawCyberLimb(ctx, leftShoulder, leftElbow, 18, scanCutoff, t);
       drawCyberLimb(ctx, rightShoulder, rightElbow, 18, scanCutoff, t);
       drawCyberLimb(ctx, leftElbow, leftWrist, 16, scanCutoff, t);
       drawCyberLimb(ctx, rightElbow, rightWrist, 16, scanCutoff, t);
 
+      // 4.5 Ceramic Neck Gorget Collar
+      drawNeckGorget(ctx, leftShoulder, rightShoulder, nose, true, scanCutoff);
+
+      // 5. Aerodynamic Helmet & Glowing Cyan Chevron V-Visor
       if (nose.y >= scanCutoff) {
         ctx.save();
         const headRadius = scale * 0.11;
 
+        // White Composite Shell
         ctx.fillStyle = '#f8fafc';
         ctx.strokeStyle = '#00e5ff';
         ctx.lineWidth = 2.5;
@@ -1042,10 +1142,12 @@
         ctx.fill();
         ctx.stroke();
 
+        // Ear Fin Thrusters
         ctx.fillStyle = '#0f172a';
         ctx.fillRect(nose.x - headRadius - 8, nose.y - 12, 10, 24);
         ctx.fillRect(nose.x + headRadius - 2, nose.y - 12, 10, 24);
 
+        // Cyan Glowing Chevron V-Visor
         ctx.shadowColor = '#00e5ff';
         ctx.shadowBlur = 18;
         ctx.fillStyle = '#00e5ff';
@@ -1060,6 +1162,7 @@
         ctx.closePath();
         ctx.fill();
 
+        // Visor Highlight
         ctx.fillStyle = '#ffffff';
         ctx.beginPath();
         ctx.arc(nose.x, nose.y + 4, 3, 0, Math.PI * 2);
@@ -1078,6 +1181,7 @@
       ctx.shadowColor = '#00e5ff';
       ctx.shadowBlur = 10;
 
+      // Angled wing plate
       ctx.beginPath();
       ctx.moveTo(-10 * dir, -12);
       ctx.lineTo(40 * dir, -22);
@@ -1087,6 +1191,7 @@
       ctx.fill();
       ctx.stroke();
 
+      // Energy Vent
       ctx.fillStyle = '#00e5ff';
       ctx.fillRect(20 * dir, -12, 16 * dir, 4);
 
@@ -1104,6 +1209,7 @@
       ctx.translate(p1.x, p1.y);
       ctx.rotate(angle);
 
+      // Ceramic Outer Shell
       ctx.fillStyle = '#f8fafc';
       ctx.strokeStyle = '#00e5ff';
       ctx.lineWidth = 2;
@@ -1112,6 +1218,7 @@
       ctx.fillRect(5, -width * 0.5, dist - 10, width);
       ctx.strokeRect(5, -width * 0.5, dist - 10, width);
 
+      // Center Conduit Line
       ctx.strokeStyle = '#00e5ff';
       ctx.lineWidth = 3;
       ctx.beginPath();
@@ -1163,6 +1270,7 @@
 
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+      // 1. Render Video feed if camera is active
       if (cameraActive && video.readyState >= 2) {
         ctx.save();
         ctx.translate(canvas.width, 0);
@@ -1170,9 +1278,11 @@
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
         ctx.restore();
 
+        // Dark sci-fi vignette tint
         ctx.fillStyle = 'rgba(7, 10, 18, 0.45)';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
       } else {
+        // Virtual Holo-Chamber Background
         const grad = ctx.createRadialGradient(
           canvas.width * 0.5, canvas.height * 0.5, 40,
           canvas.width * 0.5, canvas.height * 0.5, canvas.width * 0.8
@@ -1182,6 +1292,7 @@
         ctx.fillStyle = grad;
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+        // Holographic floor grid
         ctx.save();
         ctx.strokeStyle = 'rgba(0, 229, 255, 0.12)';
         ctx.lineWidth = 1;
@@ -1201,19 +1312,24 @@
         ctx.restore();
       }
 
+      // 2. Get landmarks (Simulated or Real Tracking)
       const pose = getSimulatedPose(now);
 
-      let scanCutoffY = 0;
+      // 3. Calculate Equip Laser Scanning (Feet to Head)
+      let scanCutoffY = 0; // Everything visible
       if (isEquipping) {
         const elapsed = now - scanStartTime;
         const progress = Math.min(1.0, elapsed / SCAN_DURATION);
+        // Animate from feet (highest Y) to head (lowest Y)
         const feetY = pose.leftAnkle.y + 40;
         const headTopY = pose.nose.y - pose.scale * 0.2;
         scanCutoffY = feetY - (feetY - headTopY) * progress;
 
+        // Position scan line
         const scanLine = document.getElementById('scanLine');
         scanLine.style.top = scanCutoffY + 'px';
 
+        // Draw laser scan glowing plane
         ctx.save();
         ctx.fillStyle = armors[currentArmorIndex].id === 'cyber_knight' ? 'rgba(0, 229, 255, 0.2)' : 'rgba(255, 179, 0, 0.2)';
         ctx.fillRect(0, scanCutoffY, canvas.width, canvas.height - scanCutoffY);
@@ -1234,6 +1350,7 @@
         }
       }
 
+      // 4. Render Selected Armor
       const currentArmor = armors[currentArmorIndex];
       if (currentArmor.id === 'dark_knight') {
         drawDarkKnight(ctx, pose, now, scanCutoffY);
@@ -1294,38 +1411,70 @@
       playSound('click');
     }
 
+    const btnAutoEquip = document.getElementById('btnAutoEquip');
+    const autoEquipLabel = document.getElementById('autoEquipLabel');
+    let autoEquipEnabled = true;
+
+    function triggerEquip() {
+      isEquipping = true;
+      scanStartTime = performance.now();
+      document.getElementById('scan-overlay').style.display = 'block';
+      playSound('equip');
+    }
+
+    if (btnAutoEquip) {
+      btnAutoEquip.addEventListener('click', () => {
+        autoEquipEnabled = !autoEquipEnabled;
+        if (autoEquipEnabled) {
+          btnAutoEquip.style.borderColor = 'rgba(0, 229, 255, 0.6)';
+          btnAutoEquip.style.color = '#00e5ff';
+          autoEquipLabel.textContent = '⚡ AUTO: ON';
+          triggerEquip();
+        } else {
+          btnAutoEquip.style.borderColor = 'rgba(255, 255, 255, 0.2)';
+          btnAutoEquip.style.color = '#94a3b8';
+          autoEquipLabel.textContent = 'AUTO: OFF';
+        }
+        playSound('click');
+      });
+    }
+
     btnPrev.addEventListener('click', () => {
       currentArmorIndex = (currentArmorIndex - 1 + armors.length) % armors.length;
       updateArmorUI();
+      if (autoEquipEnabled) triggerEquip();
     });
 
     btnNext.addEventListener('click', () => {
       currentArmorIndex = (currentArmorIndex + 1) % armors.length;
       updateArmorUI();
+      if (autoEquipEnabled) triggerEquip();
     });
 
     btnEquip.addEventListener('click', () => {
-      isEquipping = true;
-      scanStartTime = performance.now();
-      document.getElementById('scan-overlay').style.display = 'block';
-      playSound('equip');
+      triggerEquip();
     });
 
+    // Pose stance cycling
     btnPoseMode.addEventListener('click', () => {
       poseModeIndex = (poseModeIndex + 1) % poseModes.length;
       poseModeLabel.textContent = 'STANCE: ' + poseModes[poseModeIndex];
       playSound('click');
+      if (autoEquipEnabled) triggerEquip();
     });
 
+    // Sound toggle
     btnAudioToggle.addEventListener('click', () => {
       soundEnabled = !soundEnabled;
       audioLabel.textContent = soundEnabled ? 'FX SOUND: ON' : 'FX SOUND: OFF';
       playSound('click');
     });
 
+    // Webcam Toggle
     btnToggleCam.addEventListener('click', async () => {
       playSound('click');
       if (cameraActive) {
+        // Turn off
         if (video.srcObject) {
           video.srcObject.getTracks().forEach(track => track.stop());
         }
@@ -1333,6 +1482,7 @@
         statusText.textContent = 'SIMULATOR ACTIVE';
         btnToggleCam.style.color = 'var(--cyan)';
       } else {
+        // Request Camera
         try {
           const stream = await navigator.mediaDevices.getUserMedia({
             video: {
@@ -1353,6 +1503,7 @@
       }
     });
 
+    // Take Snapshot
     btnSnapshot.addEventListener('click', () => {
       playSound('click');
       const dataUrl = canvas.toDataURL('image/png');
@@ -1362,6 +1513,7 @@
       a.click();
     });
 
+    // Info Modal
     btnInfo.addEventListener('click', () => {
       infoModal.style.display = 'flex';
       playSound('click');
@@ -1371,6 +1523,11 @@
       infoModal.style.display = 'none';
       playSound('click');
     });
+
+    // Auto-equip on start
+    setTimeout(() => {
+      if (autoEquipEnabled) triggerEquip();
+    }, 600);
   </script>
 </body>
 </html>

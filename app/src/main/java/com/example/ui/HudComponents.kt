@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.CameraFront
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Shield
@@ -196,12 +197,15 @@ fun TrackingStatusHud(
 /**
  * HUD Bottom Control Toolbar:
  * - Toggle Front Camera vs Demo Pose
+ * - Toggle Auto-Equip on Body Detect
  * - Toggle Skeleton Debug Lines
  */
 @Composable
 fun HudControlsBar(
     isDemoMode: Boolean,
     onToggleDemoMode: () -> Unit,
+    autoEquipEnabled: Boolean,
+    onToggleAutoEquip: () -> Unit,
     showSkeleton: Boolean,
     onToggleSkeleton: () -> Unit,
     demoStateName: String,
@@ -243,6 +247,38 @@ fun HudControlsBar(
             )
         }
 
+        // Auto-Equip on Body Detect Toggle Button
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(14.dp))
+                .clickable(onClick = onToggleAutoEquip)
+                .background(if (autoEquipEnabled) HudNeonCyan.copy(alpha = 0.22f) else Color.White.copy(alpha = 0.08f))
+                .border(
+                    width = 1.dp,
+                    color = if (autoEquipEnabled) HudNeonCyan.copy(alpha = 0.7f) else Color.White.copy(alpha = 0.2f),
+                    shape = RoundedCornerShape(14.dp)
+                )
+                .padding(horizontal = 9.dp, vertical = 6.dp)
+                .testTag("auto_equip_toggle_button")
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Default.Bolt,
+                    contentDescription = "Auto Equip",
+                    tint = if (autoEquipEnabled) HudNeonCyan else Color.White.copy(alpha = 0.5f),
+                    modifier = Modifier.size(15.dp)
+                )
+                Spacer(modifier = Modifier.width(3.dp))
+                Text(
+                    text = if (autoEquipEnabled) "AUTO: ON" else "AUTO: OFF",
+                    color = if (autoEquipEnabled) HudNeonCyan else Color.White.copy(alpha = 0.6f),
+                    fontSize = 10.sp,
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
+
         if (isDemoMode) {
             // Next Demo Pose trigger
             Box(
@@ -254,7 +290,7 @@ fun HudControlsBar(
                     .testTag("next_pose_button")
             ) {
                 Text(
-                    text = "NEXT POSE ▶",
+                    text = "NEXT ▶",
                     color = HudNeonCyan,
                     fontSize = 9.sp,
                     fontFamily = FontFamily.Monospace,
@@ -269,7 +305,7 @@ fun HudControlsBar(
                 .clip(RoundedCornerShape(14.dp))
                 .clickable(onClick = onToggleSkeleton)
                 .background(if (showSkeleton) HudNeonGreen.copy(alpha = 0.25f) else Color.Transparent)
-                .padding(horizontal = 10.dp, vertical = 6.dp)
+                .padding(horizontal = 9.dp, vertical = 6.dp)
                 .testTag("skeleton_toggle_button")
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -277,15 +313,74 @@ fun HudControlsBar(
                     imageVector = if (showSkeleton) Icons.Default.Visibility else Icons.Default.VisibilityOff,
                     contentDescription = "Toggle Skeleton",
                     tint = if (showSkeleton) HudNeonGreen else Color.White.copy(alpha = 0.5f),
-                    modifier = Modifier.size(16.dp)
+                    modifier = Modifier.size(15.dp)
                 )
-                Spacer(modifier = Modifier.width(4.dp))
+                Spacer(modifier = Modifier.width(3.dp))
                 Text(
                     text = "BONES",
                     color = if (showSkeleton) HudNeonGreen else Color.White.copy(alpha = 0.6f),
                     fontSize = 10.sp,
                     fontFamily = FontFamily.Monospace,
                     fontWeight = FontWeight.Medium
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Biometric Body Targeting Reticle & Alignment Guide
+ * Shown when waiting for body detection to provide instant auto-equip visual feedback.
+ */
+@Composable
+fun BodyTargetingReticle(
+    isDetected: Boolean,
+    autoEquipEnabled: Boolean,
+    modifier: Modifier = Modifier
+) {
+    val infiniteTransition = rememberInfiniteTransition(label = "reticle_pulse")
+    val pulseAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.35f,
+        targetValue = 0.85f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1200, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "pulse_alpha"
+    )
+
+    if (!isDetected) {
+        Box(
+            modifier = modifier
+                .clip(RoundedCornerShape(16.dp))
+                .background(Color(0x99090D16))
+                .border(1.dp, Color(0xFF00F0FF).copy(alpha = pulseAlpha * 0.7f), RoundedCornerShape(16.dp))
+                .padding(horizontal = 20.dp, vertical = 14.dp)
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(10.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFFFFB703).copy(alpha = pulseAlpha))
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "🔍 DETEKSI TUBUH REAL-TIME",
+                        color = Color(0xFFFFB703),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        fontFamily = FontFamily.Monospace,
+                        letterSpacing = 1.sp
+                    )
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = if (autoEquipEnabled) "Posisikan tubuh di depan kamera • Auto-Equip aktif" else "Posisikan tubuh di depan kamera",
+                    color = Color.White.copy(alpha = 0.8f),
+                    fontSize = 10.sp,
+                    fontFamily = FontFamily.Monospace
                 )
             }
         }

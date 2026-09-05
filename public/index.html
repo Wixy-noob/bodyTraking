@@ -491,6 +491,10 @@
       <div class="bottom-container">
         <!-- Quick toolbar -->
         <div class="quick-toolbar interactive">
+          <button class="pill-btn" id="btnAutoEquip" style="border-color: rgba(0, 229, 255, 0.6); color: #00e5ff;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M11 21h-1l1-7H7.5c-.88 0-.33-.75-.31-.78C8.48 10.94 10.42 7.54 13.01 3h1l-1 7h3.51c.4 0 .62.19.4.66C12.97 17.55 11 21 11 21z"/></svg>
+            <span id="autoEquipLabel">⚡ AUTO: ON</span>
+          </button>
           <button class="pill-btn" id="btnPoseMode">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2c1.1 0 2 .9 2 2s-.9 2-2 2-2-.9-2-2 .9-2 2-2zm9 7h-6v13h-2v-6h-2v6H9V9H3V7h18v2z"/></svg>
             <span id="poseModeLabel">STANCE: IDLE</span>
@@ -781,6 +785,64 @@
     // ==========================================
     // ARMOR ART RENDERERS
     // ==========================================
+    // Wearable Anatomical Fit Helpers ("Kayak pake armor asli")
+    function drawAnatomicalUndersuit(ctx, pose, isCyber, scanCutoff) {
+      const { leftShoulder, rightShoulder, leftElbow, rightElbow, leftWrist, rightWrist, leftHip, rightHip, leftKnee, rightKnee, leftAnkle, rightAnkle, scale } = pose;
+      const baseColor = isCyber ? '#0b1120' : '#0d1017';
+      const seamColor = isCyber ? 'rgba(0, 229, 255, 0.35)' : '#1e293b';
+
+      ctx.save();
+      // 1. Torso body-glove
+      if (leftShoulder.y >= scanCutoff) {
+        ctx.fillStyle = baseColor;
+        ctx.strokeStyle = seamColor;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(leftShoulder.x - 12, leftShoulder.y);
+        ctx.lineTo(rightShoulder.x + 12, rightShoulder.y);
+        ctx.lineTo(rightHip.x + 14, rightHip.y);
+        ctx.lineTo(leftHip.x - 14, leftHip.y);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+      }
+
+      // 2. Arms sleeves
+      drawLimbSegment(ctx, leftShoulder, leftElbow, 24, baseColor, seamColor, scanCutoff);
+      drawLimbSegment(ctx, rightShoulder, rightElbow, 24, baseColor, seamColor, scanCutoff);
+      drawLimbSegment(ctx, leftElbow, leftWrist, 18, baseColor, seamColor, scanCutoff);
+      drawLimbSegment(ctx, rightElbow, rightWrist, 18, baseColor, seamColor, scanCutoff);
+
+      // 3. Legs tights
+      drawLimbSegment(ctx, leftHip, leftKnee, 26, baseColor, seamColor, scanCutoff);
+      drawLimbSegment(ctx, rightHip, rightKnee, 26, baseColor, seamColor, scanCutoff);
+      drawLimbSegment(ctx, leftKnee, leftAnkle, 20, baseColor, seamColor, scanCutoff);
+      drawLimbSegment(ctx, rightKnee, rightAnkle, 20, baseColor, seamColor, scanCutoff);
+      ctx.restore();
+    }
+
+    function drawNeckGorget(ctx, leftShoulder, rightShoulder, nose, isCyber, scanCutoff) {
+      const midShoulderX = (leftShoulder.x + rightShoulder.x) * 0.5;
+      const midShoulderY = (leftShoulder.y + rightShoulder.y) * 0.5;
+      const neckY = midShoulderY - (midShoulderY - nose.y) * 0.45;
+      if (neckY < scanCutoff) return;
+
+      const w = Math.abs(rightShoulder.x - leftShoulder.x) * 0.38;
+      ctx.save();
+      ctx.fillStyle = isCyber ? '#1e293b' : '#1e222d';
+      ctx.strokeStyle = isCyber ? '#00e5ff' : '#94a3b8';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(midShoulderX - w * 0.5, midShoulderY);
+      ctx.lineTo(midShoulderX + w * 0.5, midShoulderY);
+      ctx.lineTo(midShoulderX + w * 0.35, neckY);
+      ctx.lineTo(midShoulderX - w * 0.35, neckY);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+    }
+
     function drawDarkKnight(ctx, pose, time, scanCutoff) {
       const t = time * 0.001;
       const { nose, leftShoulder, rightShoulder, leftElbow, rightElbow, leftWrist, rightWrist, leftHip, rightHip, leftKnee, rightKnee, leftAnkle, rightAnkle, scale } = pose;
@@ -789,6 +851,9 @@
       const chestY = (leftShoulder.y + leftHip.y) * 0.5;
       const hipMidX = (leftHip.x + rightHip.x) * 0.5;
       const hipMidY = (leftHip.y + rightHip.y) * 0.5;
+
+      // 0. Anatomical Under-Armor Compression Suit
+      drawAnatomicalUndersuit(ctx, pose, false, scanCutoff);
 
       // 1. Flowing Midnight Cape (behind torso)
       if (shoulderYCutoff(leftShoulder.y, scanCutoff)) {
@@ -900,6 +965,9 @@
       drawLimbSegment(ctx, leftElbow, leftWrist, 14, '#334155', '#e2e8f0', scanCutoff);
       drawLimbSegment(ctx, rightElbow, rightWrist, 14, '#334155', '#e2e8f0', scanCutoff);
 
+      // 6.5 Neck Gorget (bridges chest to helmet)
+      drawNeckGorget(ctx, leftShoulder, rightShoulder, nose, false, scanCutoff);
+
       // 7. Dark Midnight Cowl & Gothic Helmet
       if (nose.y >= scanCutoff) {
         ctx.save();
@@ -973,6 +1041,9 @@
       const chestY = (leftShoulder.y + leftHip.y) * 0.5;
       const hipMidX = (leftHip.x + rightHip.x) * 0.5;
       const hipMidY = (leftHip.y + rightHip.y) * 0.5;
+
+      // 0. Anatomical Under-Armor Nano-Compression Suit
+      drawAnatomicalUndersuit(ctx, pose, true, scanCutoff);
 
       // 1. Ceramic Exosuit Legs with Cyan Conduits
       drawCyberLimb(ctx, leftKnee, leftAnkle, 20, scanCutoff, t);
@@ -1050,6 +1121,9 @@
       drawCyberLimb(ctx, rightShoulder, rightElbow, 18, scanCutoff, t);
       drawCyberLimb(ctx, leftElbow, leftWrist, 16, scanCutoff, t);
       drawCyberLimb(ctx, rightElbow, rightWrist, 16, scanCutoff, t);
+
+      // 4.5 Ceramic Neck Gorget Collar
+      drawNeckGorget(ctx, leftShoulder, rightShoulder, nose, true, scanCutoff);
 
       // 5. Aerodynamic Helmet & Glowing Cyan Chevron V-Visor
       if (nose.y >= scanCutoff) {
@@ -1337,21 +1411,48 @@
       playSound('click');
     }
 
+    const btnAutoEquip = document.getElementById('btnAutoEquip');
+    const autoEquipLabel = document.getElementById('autoEquipLabel');
+    let autoEquipEnabled = true;
+
+    function triggerEquip() {
+      isEquipping = true;
+      scanStartTime = performance.now();
+      document.getElementById('scan-overlay').style.display = 'block';
+      playSound('equip');
+    }
+
+    if (btnAutoEquip) {
+      btnAutoEquip.addEventListener('click', () => {
+        autoEquipEnabled = !autoEquipEnabled;
+        if (autoEquipEnabled) {
+          btnAutoEquip.style.borderColor = 'rgba(0, 229, 255, 0.6)';
+          btnAutoEquip.style.color = '#00e5ff';
+          autoEquipLabel.textContent = '⚡ AUTO: ON';
+          triggerEquip();
+        } else {
+          btnAutoEquip.style.borderColor = 'rgba(255, 255, 255, 0.2)';
+          btnAutoEquip.style.color = '#94a3b8';
+          autoEquipLabel.textContent = 'AUTO: OFF';
+        }
+        playSound('click');
+      });
+    }
+
     btnPrev.addEventListener('click', () => {
       currentArmorIndex = (currentArmorIndex - 1 + armors.length) % armors.length;
       updateArmorUI();
+      if (autoEquipEnabled) triggerEquip();
     });
 
     btnNext.addEventListener('click', () => {
       currentArmorIndex = (currentArmorIndex + 1) % armors.length;
       updateArmorUI();
+      if (autoEquipEnabled) triggerEquip();
     });
 
     btnEquip.addEventListener('click', () => {
-      isEquipping = true;
-      scanStartTime = performance.now();
-      document.getElementById('scan-overlay').style.display = 'block';
-      playSound('equip');
+      triggerEquip();
     });
 
     // Pose stance cycling
@@ -1359,6 +1460,7 @@
       poseModeIndex = (poseModeIndex + 1) % poseModes.length;
       poseModeLabel.textContent = 'STANCE: ' + poseModes[poseModeIndex];
       playSound('click');
+      if (autoEquipEnabled) triggerEquip();
     });
 
     // Sound toggle
@@ -1421,6 +1523,11 @@
       infoModal.style.display = 'none';
       playSound('click');
     });
+
+    // Auto-equip on start
+    setTimeout(() => {
+      if (autoEquipEnabled) triggerEquip();
+    }, 600);
   </script>
 </body>
 </html>
