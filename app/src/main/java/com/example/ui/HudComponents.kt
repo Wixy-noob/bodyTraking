@@ -163,28 +163,28 @@ fun TrackingStatusHud(
         modifier = modifier
             .clip(RoundedCornerShape(10.dp))
             .background(HudDarkBg)
-            .border(1.dp, HudGlassBorder, RoundedCornerShape(10.dp))
-            .padding(horizontal = 12.dp, vertical = 8.dp)
+            .border(1.dp, if (isDetected) HudNeonGreen else HudGlassBorder, RoundedCornerShape(10.dp))
+            .padding(horizontal = 14.dp, vertical = 8.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                modifier = Modifier
-                    .size(8.dp)
-                    .clip(CircleShape)
-                    .background(statusColor.copy(alpha = if (isDetected) 1f else pulseAlpha))
+            Text(
+                text = if (isDetected) "●" else "○",
+                color = statusColor,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold
             )
             Spacer(modifier = Modifier.width(8.dp))
             Column {
                 Text(
-                    text = if (isDemoMode) "TEST POSE SIMULATOR" else if (isDetected) "BODY LOCK: ACTIVE" else "TRACKING: SCANNING...",
+                    text = if (isDetected) "● BODY DETECTED" else "○ SEARCHING FOR BODY...",
                     color = statusColor,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.ExtraBold,
                     fontFamily = FontFamily.Monospace,
                     letterSpacing = 1.sp
                 )
                 Text(
-                    text = if (isDemoMode) "Front Camera Mode Available" else "Confidence: ${(confidence * 100).toInt()}%",
+                    text = if (isDetected) "Confidence: ${(confidence * 100).toInt()}% • LOCKED" else if (isDemoMode) "Test Pose Simulator Active" else "Arahkan kamera ke tubuh manusia",
                     color = Color.White.copy(alpha = 0.65f),
                     fontSize = 9.sp,
                     fontFamily = FontFamily.Monospace

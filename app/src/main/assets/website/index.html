@@ -7,11 +7,16 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800;900&family=Rajdhani:wght@600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+  
+  <!-- MediaPipe Pose & Camera Utils for Real-time Body Tracking -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
+
   <style>
     :root {
       --bg: #030712;
       --hud-dark: rgba(9, 13, 22, 0.88);
-      --hud-border: rgba(0, 240, 255, 0.28);
+      --hud-border: rgba(0, 240, 255, 0.32);
       --neon-cyan: #00f0ff;
       --neon-green: #00ff66;
       --amber: #ffb703;
@@ -55,21 +60,22 @@
       height: 100%;
       object-fit: cover;
       transform: scaleX(-1);
-      display: none;
       z-index: 0;
+      background-color: #050811;
     }
 
-    /* Primary AR Drawing Canvas */
+    /* Primary AR Drawing Canvas (renders directly on top of mirrored video) */
     #arCanvas {
       position: absolute;
       top: 0;
       left: 0;
       width: 100%;
       height: 100%;
-      z-index: 1;
+      z-index: 2;
+      pointer-events: none;
     }
 
-    /* HUD Layer (Edge-to-Edge like Compose Scaffold) */
+    /* HUD Layer */
     .hud-layer {
       position: absolute;
       top: 0;
@@ -88,7 +94,7 @@
       pointer-events: auto;
     }
 
-    /* TOP BAR: TrackingStatusHud on Left, ArmorHudButton on Right */
+    /* TOP BAR: Tracking Status HUD on Left, Armor HUD Button on Right */
     .top-bar {
       display: flex;
       justify-content: space-between;
@@ -96,61 +102,73 @@
       width: 100%;
     }
 
-    /* Top Left: TrackingStatusHud */
-    .tracking-status-hud {
+    /* Top Left: Tracking Status Badge */
+    .tracking-status-badge {
       display: flex;
       align-items: center;
       gap: 10px;
       background: var(--hud-dark);
-      border: 1px solid var(--hud-border);
-      border-radius: 10px;
-      padding: 8px 14px;
-      box-shadow: 0 4px 18px rgba(0, 0, 0, 0.6);
+      border: 1.5px solid var(--hud-border);
+      border-radius: 12px;
+      padding: 8px 16px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.7);
       backdrop-filter: blur(12px);
+      transition: border-color 0.3s ease, box-shadow 0.3s ease;
     }
 
-    .status-indicator-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: var(--neon-green);
-      box-shadow: 0 0 10px var(--neon-green);
-      animation: radar-pulse 1.4s infinite ease-in-out;
+    .tracking-status-badge.detected {
+      border-color: var(--neon-green);
+      box-shadow: 0 0 16px rgba(0, 255, 102, 0.35);
     }
 
-    .status-indicator-dot.scanning {
-      background: var(--amber);
-      box-shadow: 0 0 10px var(--amber);
+    .tracking-status-badge.searching {
+      border-color: var(--amber);
+      box-shadow: 0 0 16px rgba(255, 183, 3, 0.35);
+    }
+
+    .status-symbol {
+      font-size: 16px;
+      line-height: 1;
+      color: var(--amber);
+      animation: radar-pulse 1.2s infinite ease-in-out;
+    }
+
+    .tracking-status-badge.detected .status-symbol {
+      color: var(--neon-green);
+      animation: none;
+      filter: drop-shadow(0 0 6px var(--neon-green));
     }
 
     @keyframes radar-pulse {
       0%, 100% { opacity: 1; transform: scale(1); }
-      50% { opacity: 0.35; transform: scale(0.75); }
+      50% { opacity: 0.35; transform: scale(0.85); }
     }
 
-    .status-text-box {
+    .status-text-block {
       display: flex;
       flex-direction: column;
     }
 
-    .status-title {
-      font-size: 11px;
-      font-weight: 700;
-      letter-spacing: 1px;
-      color: var(--neon-green);
-    }
-
-    .status-title.scanning {
+    .status-main-text {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 1.5px;
       color: var(--amber);
     }
 
-    .status-subtitle {
+    .tracking-status-badge.detected .status-main-text {
+      color: var(--neon-green);
+    }
+
+    .status-sub-text {
       font-size: 9px;
       color: var(--text-dim);
+      letter-spacing: 0.5px;
       margin-top: 1px;
     }
 
-    /* Top Right: ArmorHudButton */
+    /* Top Right: Armor HUD Menu Button */
     .armor-hud-btn {
       display: flex;
       align-items: center;
@@ -160,7 +178,7 @@
       border-radius: 12px;
       padding: 8px 16px;
       cursor: pointer;
-      box-shadow: 0 0 14px rgba(0, 240, 255, 0.25);
+      box-shadow: 0 0 16px rgba(0, 240, 255, 0.25);
       backdrop-filter: blur(12px);
       transition: transform 0.15s ease, box-shadow 0.2s ease, border-color 0.2s ease;
     }
@@ -181,6 +199,7 @@
     }
 
     .armor-btn-label {
+      font-family: 'Orbitron', sans-serif;
       font-size: 13px;
       font-weight: 800;
       letter-spacing: 2px;
@@ -189,11 +208,12 @@
 
     .armor-btn-sub {
       font-size: 9px;
-      font-weight: 600;
+      font-weight: 700;
       color: var(--neon-cyan);
+      letter-spacing: 1px;
     }
 
-    /* NOTIFICATION BANNER (Holographic pill dropped from top) */
+    /* Holographic Notification Banner */
     .hud-notification-banner {
       position: absolute;
       top: 72px;
@@ -206,7 +226,7 @@
       display: flex;
       align-items: center;
       gap: 8px;
-      box-shadow: 0 4px 24px rgba(0, 240, 255, 0.35);
+      box-shadow: 0 4px 24px rgba(0, 240, 255, 0.4);
       opacity: 0;
       pointer-events: none;
       transition: all 0.28s cubic-bezier(0.16, 1, 0.3, 1);
@@ -225,27 +245,28 @@
       color: #ffffff;
     }
 
-    /* CENTER: BodyTargetingReticle (When waiting for body) */
+    /* Central Body Alignment Reticle */
     .center-reticle-box {
       position: absolute;
       top: 50%;
       left: 50%;
       transform: translate(-50%, -50%);
-      background: rgba(9, 13, 22, 0.75);
-      border: 1px solid rgba(0, 240, 255, 0.5);
+      background: rgba(9, 13, 22, 0.8);
+      border: 1.5px solid rgba(255, 183, 3, 0.6);
       border-radius: 16px;
-      padding: 16px 24px;
+      padding: 18px 24px;
       text-align: center;
-      box-shadow: 0 0 30px rgba(0, 240, 255, 0.2);
-      backdrop-filter: blur(10px);
-      transition: opacity 0.3s ease;
+      box-shadow: 0 0 32px rgba(255, 183, 3, 0.2);
+      backdrop-filter: blur(12px);
+      transition: opacity 0.3s ease, transform 0.3s ease;
       z-index: 8;
       max-width: 90%;
+      pointer-events: none;
     }
 
     .center-reticle-box.hidden {
       opacity: 0;
-      pointer-events: none;
+      transform: translate(-50%, -45%);
     }
 
     .reticle-header {
@@ -266,14 +287,15 @@
     }
 
     .reticle-title {
+      font-family: 'Orbitron', sans-serif;
       font-size: 12px;
       font-weight: 800;
-      letter-spacing: 1px;
+      letter-spacing: 1.5px;
       color: var(--amber);
     }
 
     .reticle-sub {
-      font-size: 10px;
+      font-size: 11px;
       color: var(--text-dim);
     }
 
@@ -282,7 +304,7 @@
       display: flex;
       justify-content: center;
       width: 100%;
-      margin-bottom: 8px;
+      margin-bottom: 12px;
       z-index: 15;
     }
 
@@ -294,21 +316,21 @@
       border: 1px solid var(--hud-border);
       border-radius: 24px;
       padding: 6px 12px;
-      box-shadow: 0 6px 24px rgba(0, 0, 0, 0.7);
+      box-shadow: 0 6px 28px rgba(0, 0, 0, 0.75);
       backdrop-filter: blur(16px);
     }
 
     .hud-chip-btn {
       display: inline-flex;
       align-items: center;
-      gap: 5px;
+      gap: 6px;
       background: transparent;
       border: 1px solid transparent;
       border-radius: 16px;
-      padding: 6px 11px;
+      padding: 7px 12px;
       color: #fff;
       font-family: 'Share Tech Mono', monospace;
-      font-size: 10.5px;
+      font-size: 11px;
       font-weight: 700;
       cursor: pointer;
       transition: all 0.2s ease;
@@ -326,7 +348,7 @@
 
     .hud-chip-btn.active-green {
       background: rgba(0, 255, 102, 0.2);
-      border-color: rgba(0, 255, 102, 0.6);
+      border-color: rgba(0, 255, 102, 0.7);
       color: var(--neon-green);
     }
 
@@ -336,19 +358,19 @@
     }
 
     .hud-chip-btn svg {
-      width: 14px;
-      height: 14px;
+      width: 15px;
+      height: 15px;
       fill: currentColor;
     }
 
-    /* ARMOR SELECTOR DRAWER (Identical to Android APK ArmorSelectorPanel) */
+    /* ARMOR SELECTOR DRAWER */
     .armor-drawer-backdrop {
       position: absolute;
       top: 0;
       left: 0;
       width: 100%;
       height: 100%;
-      background: rgba(0, 0, 0, 0.6);
+      background: rgba(0, 0, 0, 0.65);
       backdrop-filter: blur(8px);
       z-index: 50;
       opacity: 0;
@@ -371,7 +393,7 @@
       border: 1.5px solid rgba(0, 240, 255, 0.4);
       border-radius: 24px 24px 0 0;
       padding: 20px 20px 28px 20px;
-      box-shadow: 0 -8px 36px rgba(0, 0, 0, 0.8), inset 0 0 20px rgba(0, 240, 255, 0.06);
+      box-shadow: 0 -8px 36px rgba(0, 0, 0, 0.85), inset 0 0 20px rgba(0, 240, 255, 0.08);
       transform: translateY(100%);
       transition: transform 0.32s cubic-bezier(0.18, 0.9, 0.28, 1);
       display: flex;
@@ -383,7 +405,6 @@
       transform: translateY(0);
     }
 
-    /* Drawer Header */
     .drawer-header {
       display: flex;
       justify-content: space-between;
@@ -405,6 +426,7 @@
     }
 
     .drawer-title {
+      font-family: 'Orbitron', sans-serif;
       font-size: 16px;
       font-weight: 900;
       letter-spacing: 3px;
@@ -424,7 +446,6 @@
       cursor: pointer;
     }
 
-    /* Carousel Nav */
     .drawer-carousel {
       display: flex;
       align-items: center;
@@ -455,6 +476,7 @@
     }
 
     .drawer-armor-name {
+      font-family: 'Orbitron', sans-serif;
       font-size: 17px;
       font-weight: 800;
       letter-spacing: 2px;
@@ -468,7 +490,6 @@
       letter-spacing: 1px;
     }
 
-    /* Preview Card */
     .drawer-preview-card {
       position: relative;
       width: 100%;
@@ -499,7 +520,6 @@
       padding: 12px 14px;
     }
 
-    /* Stats inside preview */
     .drawer-stats-row {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
@@ -526,7 +546,6 @@
       color: #fff;
     }
 
-    /* Action Button (EQUIP / UNEQUIP) */
     .drawer-equip-btn {
       width: 100%;
       background: linear-gradient(90deg, #00b4d8 0%, #00f0ff 100%);
@@ -556,14 +575,7 @@
       box-shadow: 0 4px 20px rgba(203, 213, 225, 0.3);
     }
 
-    .drawer-equip-btn.unequip {
-      background: rgba(255, 255, 255, 0.1);
-      color: #ef4444;
-      border: 1px solid rgba(239, 68, 68, 0.4);
-      box-shadow: none;
-    }
-
-    /* Laser scanline animation overlay */
+    /* Laser scanline overlay */
     #scan-overlay {
       position: absolute;
       top: 0;
@@ -586,10 +598,10 @@
 </head>
 <body>
   <div id="app-container">
-    <!-- Webcam video element -->
+    <!-- Real-time Front Camera Video Stream -->
     <video id="webcam" autoplay playsinline muted></video>
 
-    <!-- Vector AR Canvas -->
+    <!-- Real-time Multi-Segment Armor & Skeleton Canvas -->
     <canvas id="arCanvas"></canvas>
 
     <!-- Laser Scanline VFX overlay -->
@@ -597,37 +609,37 @@
       <div class="laser-line" id="laserLine"></div>
     </div>
 
-    <!-- Center Reticle (when searching for body) -->
+    <!-- Center Reticle (When searching for body) -->
     <div class="center-reticle-box" id="centerReticle">
       <div class="reticle-header">
         <div class="reticle-dot"></div>
-        <div class="reticle-title">DETEKSI TUBUH REAL-TIME</div>
+        <div class="reticle-title">○ SEARCHING FOR BODY...</div>
       </div>
-      <div class="reticle-sub" id="reticleSub">Posisikan tubuh di depan kamera • Auto-Equip aktif</div>
+      <div class="reticle-sub">Posisikan tubuh di depan kamera depan smartphone</div>
     </div>
 
     <!-- Top Center Notification Banner -->
     <div class="hud-notification-banner" id="hudNotification">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="#00f0ff" id="notifIcon"><path d="M7 2v11h3v9l7-12h-4l4-8z"/></svg>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="#00f0ff"><path d="M7 2v11h3v9l7-12h-4l4-8z"/></svg>
       <span id="notifText">⚡ DETEKSI TUBUH: AUTO-EQUIP DARK KNIGHT</span>
     </div>
 
-    <!-- Edge-to-Edge HUD Layer -->
+    <!-- HUD Layer -->
     <div class="hud-layer">
       <!-- TOP BAR -->
       <div class="top-bar">
-        <!-- Status Badge -->
-        <div class="tracking-status-hud interactive">
-          <div class="status-indicator-dot" id="statusDot"></div>
-          <div class="status-text-box">
-            <div class="status-title" id="statusTitle">BODY LOCK: ACTIVE</div>
-            <div class="status-subtitle" id="statusSub">Confidence: 96%</div>
+        <!-- Exact Requested Status Text: ● BODY DETECTED or ○ SEARCHING FOR BODY... -->
+        <div class="tracking-status-badge searching interactive" id="trackingStatusBadge">
+          <span class="status-symbol" id="statusSymbol">○</span>
+          <div class="status-text-block">
+            <span class="status-main-text" id="statusMainText">SEARCHING FOR BODY...</span>
+            <span class="status-sub-text" id="statusSubText">Confidence: 0% • 0 landmarks</span>
           </div>
         </div>
 
         <!-- Armor Menu Button -->
         <div class="armor-hud-btn interactive" id="btnArmorMenu">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="#00f0ff" id="armorBtnIcon"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/></svg>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="#00f0ff"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/></svg>
           <div class="armor-btn-text">
             <span class="armor-btn-label">ARMOR</span>
             <span class="armor-btn-sub" id="armorBtnSub">DARK KNIGHT</span>
@@ -635,13 +647,13 @@
         </div>
       </div>
 
-      <!-- BOTTOM TOOLBAR (Pill Bar) -->
+      <!-- BOTTOM TOOLBAR -->
       <div class="bottom-bar-container">
         <div class="hud-controls-bar interactive">
-          <!-- Camera / Demo Mode Toggle -->
-          <button class="hud-chip-btn" id="btnCamToggle">
-            <svg viewBox="0 0 24 24"><path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/></svg>
-            <span id="camToggleLabel">FRONT CAM</span>
+          <!-- DEBUG Mode Toggle (Skeleton / Landmarks) -->
+          <button class="hud-chip-btn active-green" id="btnDebugToggle">
+            <svg viewBox="0 0 24 24"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
+            <span id="debugBtnLabel">DEBUG: ON</span>
           </button>
 
           <!-- Auto-Equip Toggle -->
@@ -650,15 +662,15 @@
             <span id="autoEquipLabel">AUTO: ON</span>
           </button>
 
-          <!-- Next Pose (Demo Stance Switcher) -->
-          <button class="hud-chip-btn subtle" id="btnNextPose">
-            <span>NEXT ▶</span>
+          <!-- Camera Restart / Mode -->
+          <button class="hud-chip-btn subtle" id="btnCamSwitch">
+            <svg viewBox="0 0 24 24"><path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/></svg>
+            <span id="camLabel">FRONT CAM</span>
           </button>
 
-          <!-- Bones / Skeleton Toggle -->
-          <button class="hud-chip-btn" id="btnBones">
-            <svg viewBox="0 0 24 24"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
-            <span>BONES</span>
+          <!-- Test Pose Mode (for verification if camera obstructed) -->
+          <button class="hud-chip-btn subtle" id="btnTestPose">
+            <span>TEST POSE ▶</span>
           </button>
         </div>
       </div>
@@ -667,7 +679,6 @@
     <!-- ARMOR SELECTOR DRAWER -->
     <div class="armor-drawer-backdrop" id="armorDrawerBackdrop">
       <div class="armor-drawer-card">
-        <!-- Header -->
         <div class="drawer-header">
           <div class="drawer-title-row">
             <div class="drawer-title-dot" id="drawerTitleDot"></div>
@@ -676,7 +687,6 @@
           <button class="drawer-close-btn" id="btnCloseDrawer">✕</button>
         </div>
 
-        <!-- Carousel Bar -->
         <div class="drawer-carousel">
           <button class="drawer-arrow-btn" id="btnPrevDrawer">◀</button>
           <div class="drawer-armor-info">
@@ -686,7 +696,6 @@
           <button class="drawer-arrow-btn" id="btnNextDrawer">▶</button>
         </div>
 
-        <!-- Preview Card -->
         <div class="drawer-preview-card">
           <img id="drawerPreviewImg" src="assets/armor_dark_knight_preview.jpg" alt="Armor Preview" />
           <div class="drawer-preview-overlay">
@@ -707,7 +716,6 @@
           </div>
         </div>
 
-        <!-- Equip / Unequip Button -->
         <button class="drawer-equip-btn dark-knight" id="btnDrawerEquip">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/></svg>
           <span id="drawerEquipText">EQUIP DARK KNIGHT</span>
@@ -718,7 +726,7 @@
 
   <script>
     // ==========================================
-    // ARMOR DEFINITIONS
+    // 1. CONSTANTS & ARMOR DATA
     // ==========================================
     const ARMOR_LIST = [
       {
@@ -728,7 +736,7 @@
         preview: 'assets/armor_dark_knight_preview.jpg',
         themeColor: '#cbd5e1',
         accentColor: '#475569',
-        glowColor: 'rgba(255, 255, 255, 0.25)',
+        glowColor: 'rgba(203, 213, 225, 0.6)',
         def: 95,
         agi: 62,
         pwr: 92
@@ -740,31 +748,45 @@
         preview: 'assets/armor_cyber_knight_preview.jpg',
         themeColor: '#00f0ff',
         accentColor: '#00b4d8',
-        glowColor: 'rgba(0, 240, 255, 0.6)',
+        glowColor: 'rgba(0, 240, 255, 0.8)',
         def: 86,
         agi: 96,
         pwr: 89
       }
     ];
 
-    // App States
     let currentArmorIndex = 0;
     let isEquipped = true;
     let isEquipScanning = false;
     let autoEquipEnabled = true;
-    let showSkeleton = false;
-    let isDemoMode = false;
-    let isCameraActive = false;
-    let isDrawerOpen = false;
+    let isDebugMode = true; // Enabled by default as requested so user can see landmarks immediately!
+    let isTestPoseMode = false;
+    let testPoseIndex = 0;
+    const TEST_POSES = ['STAND', 'HANDS_UP', 'COMBAT', 'TILT_LEFT'];
+
+    let isBodyDetected = false;
+    let bodyPresenceCooldown = false;
+    let lastDetectionTime = 0;
 
     let scanProgress = 1.0;
     let scanStartTime = 0;
-    const SCAN_DURATION = 1600;
+    const SCAN_DURATION = 1500;
 
-    let poseModeIndex = 0;
-    const POSE_MODES = ['IDLE', 'COMBAT', 'WAVE', 'WALK'];
+    // Canvas setup
+    const canvas = document.getElementById('arCanvas');
+    const ctx = canvas.getContext('2d');
+    const video = document.getElementById('webcam');
 
-    // Procedural Audio Synthesizer (Zero external mp3 dependencies)
+    function resizeCanvas() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    // ==========================================
+    // 2. AUDIO SYNTHESIZER
+    // ==========================================
     let audioCtx = null;
     function playAudio(type) {
       try {
@@ -776,50 +798,33 @@
           const osc = audioCtx.createOscillator();
           const gain = audioCtx.createGain();
           osc.type = 'sawtooth';
-          osc.frequency.setValueAtTime(140, now);
-          osc.frequency.exponentialRampToValueAtTime(880, now + 1.2);
+          osc.frequency.setValueAtTime(120, now);
+          osc.frequency.exponentialRampToValueAtTime(780, now + 1.2);
           gain.gain.setValueAtTime(0.01, now);
-          gain.gain.linearRampToValueAtTime(0.2, now + 0.3);
-          gain.gain.exponentialRampToValueAtTime(0.001, now + 1.5);
+          gain.gain.linearRampToValueAtTime(0.18, now + 0.3);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 1.4);
           osc.connect(gain);
           gain.connect(audioCtx.destination);
           osc.start(now);
-          osc.stop(now + 1.5);
-
-          setTimeout(() => {
-            if (!audioCtx) return;
-            const clank = audioCtx.createOscillator();
-            const clankGain = audioCtx.createGain();
-            clank.type = 'triangle';
-            clank.frequency.setValueAtTime(320, audioCtx.currentTime);
-            clank.frequency.exponentialRampToValueAtTime(70, audioCtx.currentTime + 0.3);
-            clankGain.gain.setValueAtTime(0.3, audioCtx.currentTime);
-            clankGain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
-            clank.connect(clankGain);
-            clankGain.connect(audioCtx.destination);
-            clank.start();
-            clank.stop(audioCtx.currentTime + 0.3);
-          }, 1200);
+          osc.stop(now + 1.4);
         } else if (type === 'click') {
           const osc = audioCtx.createOscillator();
           const gain = audioCtx.createGain();
           osc.type = 'sine';
-          osc.frequency.setValueAtTime(580, now);
-          osc.frequency.exponentialRampToValueAtTime(760, now + 0.08);
-          gain.gain.setValueAtTime(0.1, now);
+          osc.frequency.setValueAtTime(520, now);
+          osc.frequency.exponentialRampToValueAtTime(740, now + 0.08);
+          gain.gain.setValueAtTime(0.08, now);
           gain.gain.linearRampToValueAtTime(0.01, now + 0.08);
           osc.connect(gain);
           gain.connect(audioCtx.destination);
           osc.start(now);
           osc.stop(now + 0.08);
         }
-      } catch (e) {
-        // audio muted or unsupported
-      }
+      } catch (e) {}
     }
 
     // ==========================================
-    // NOTIFICATION BANNER CONTROLLER
+    // 3. HUD NOTIFICATION
     // ==========================================
     const hudNotification = document.getElementById('hudNotification');
     const notifText = document.getElementById('notifText');
@@ -831,249 +836,241 @@
       hudNotification.classList.add('show');
       notifTimer = setTimeout(() => {
         hudNotification.classList.remove('show');
-      }, 2600);
+      }, 2500);
     }
 
     // ==========================================
-    // CAMERA / WEBCAM INITIALIZATION ("kamera jangan")
+    // 4. LANDMARKS & SMOOTHING DATA STRUCTURE
     // ==========================================
-    const video = document.getElementById('webcam');
-    const camToggleLabel = document.getElementById('camToggleLabel');
-    const btnCamToggle = document.getElementById('btnCamToggle');
-    const statusTitle = document.getElementById('statusTitle');
-    const statusSub = document.getElementById('statusSub');
-    const statusDot = document.getElementById('statusDot');
+    // MediaPipe Pose landmark indices:
+    // 0: NOSE, 11: LEFT_SHOULDER, 12: RIGHT_SHOULDER
+    // 13: LEFT_ELBOW, 14: RIGHT_ELBOW, 15: LEFT_WRIST, 16: RIGHT_WRIST
+    // 23: LEFT_HIP, 24: RIGHT_HIP, 25: LEFT_KNEE, 26: RIGHT_KNEE
+    // 27: LEFT_ANKLE, 28: RIGHT_ANKLE, 31: LEFT_FOOT, 32: RIGHT_FOOT
+    // 7: LEFT_EAR, 8: RIGHT_EAR, 2: LEFT_EYE, 5: RIGHT_EYE
+
+    const rawLandmarks = {};
+    const smoothedLandmarks = {};
+    const LERP_ALPHA = 0.52; // Responsive Exponential Moving Average
+
+    function smoothPoint(name, targetX, targetY, targetZ, confidence) {
+      if (!smoothedLandmarks[name]) {
+        smoothedLandmarks[name] = { x: targetX, y: targetY, z: targetZ || 0, confidence: confidence || 1 };
+      } else {
+        smoothedLandmarks[name].x += (targetX - smoothedLandmarks[name].x) * LERP_ALPHA;
+        smoothedLandmarks[name].y += (targetY - smoothedLandmarks[name].y) * LERP_ALPHA;
+        smoothedLandmarks[name].z += ((targetZ || 0) - smoothedLandmarks[name].z) * LERP_ALPHA;
+        smoothedLandmarks[name].confidence = confidence;
+      }
+    }
+
+    // Video to Canvas Coordinate Mapper with Front Camera Horizontal Mirroring:
+    function mapVideoToCanvas(normX, normY) {
+      const cw = canvas.width;
+      const ch = canvas.height;
+      const vw = video.videoWidth || 640;
+      const vh = video.videoHeight || 480;
+
+      const scale = Math.max(cw / vw, ch / vh);
+      const renderedW = vw * scale;
+      const renderedH = vh * scale;
+      const offsetX = (cw - renderedW) * 0.5;
+      const offsetY = (ch - renderedH) * 0.5;
+
+      // Front camera is mirrored horizontally so user sees natural mirror reflection
+      const mirroredX = 1.0 - normX;
+
+      return {
+        x: offsetX + mirroredX * renderedW,
+        y: offsetY + normY * renderedH
+      };
+    }
+
+    // ==========================================
+    // 5. MEDIAPIPE POSE DETECTOR INITIALIZATION
+    // ==========================================
+    let poseDetector = null;
+    let cameraInstance = null;
+
+    function initMediaPipePose() {
+      try {
+        if (typeof Pose === 'undefined') {
+          console.warn('MediaPipe Pose library script loading...');
+          setTimeout(initMediaPipePose, 500);
+          return;
+        }
+
+        poseDetector = new Pose({
+          locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
+        });
+
+        poseDetector.setOptions({
+          modelComplexity: 0, // 0 = Lite (fastest 60fps on mobile phones), 1 = Full
+          smoothLandmarks: true,
+          enableSegmentation: false,
+          minDetectionConfidence: 0.5,
+          minTrackingConfidence: 0.5
+        });
+
+        poseDetector.onResults(onPoseResults);
+        console.log('MediaPipe Pose Detector initialized successfully.');
+      } catch (err) {
+        console.error('Failed to init MediaPipe Pose:', err);
+      }
+    }
+
+    function onPoseResults(results) {
+      if (!results || !results.poseLandmarks || results.poseLandmarks.length === 0) {
+        // No body in frame or lost tracking
+        if (Date.now() - lastDetectionTime > 400) {
+          updateTrackingStatus(false, 0, 0);
+        }
+        return;
+      }
+
+      const lm = results.poseLandmarks;
+      lastDetectionTime = Date.now();
+
+      // Check key torso landmarks to ensure solid human body lock
+      const lShoulder = lm[11];
+      const rShoulder = lm[12];
+      const lHip = lm[23];
+      const rHip = lm[24];
+
+      const torsoVis = ((lShoulder ? lShoulder.visibility || 1 : 0) +
+                        (rShoulder ? rShoulder.visibility || 1 : 0) +
+                        (lHip ? lHip.visibility || 1 : 0) +
+                        (rHip ? rHip.visibility || 1 : 0)) / 4;
+
+      if (torsoVis < 0.4) {
+        updateTrackingStatus(false, torsoVis, lm.length);
+        return;
+      }
+
+      // Map key points to canvas coordinates and apply EMA smoothing:
+      const points = [
+        { id: 0, name: 'nose' },
+        { id: 2, name: 'left_eye' },
+        { id: 5, name: 'right_eye' },
+        { id: 7, name: 'left_ear' },
+        { id: 8, name: 'right_ear' },
+        { id: 11, name: 'left_shoulder' },
+        { id: 12, name: 'right_shoulder' },
+        { id: 13, name: 'left_elbow' },
+        { id: 14, name: 'right_elbow' },
+        { id: 15, name: 'left_wrist' },
+        { id: 16, name: 'right_wrist' },
+        { id: 23, name: 'left_hip' },
+        { id: 24, name: 'right_hip' },
+        { id: 25, name: 'left_knee' },
+        { id: 26, name: 'right_knee' },
+        { id: 27, name: 'left_ankle' },
+        { id: 28, name: 'right_ankle' },
+        { id: 31, name: 'left_foot' },
+        { id: 32, name: 'right_foot' }
+      ];
+
+      for (let p of points) {
+        if (lm[p.id]) {
+          const pt = lm[p.id];
+          const canvasPos = mapVideoToCanvas(pt.x, pt.y);
+          smoothPoint(p.name, canvasPos.x, canvasPos.y, pt.z, pt.visibility || 1);
+        }
+      }
+
+      updateTrackingStatus(true, torsoVis, lm.length);
+    }
+
+    // ==========================================
+    // 6. REAL-TIME TRACKING STATUS UI HANDLER
+    // ==========================================
+    const trackingStatusBadge = document.getElementById('trackingStatusBadge');
+    const statusSymbol = document.getElementById('statusSymbol');
+    const statusMainText = document.getElementById('statusMainText');
+    const statusSubText = document.getElementById('statusSubText');
     const centerReticle = document.getElementById('centerReticle');
 
-    async function startWebcam() {
+    function updateTrackingStatus(detected, confidence, count) {
+      if (detected) {
+        if (!isBodyDetected) {
+          // Trigger Auto-Equip on new presence detection
+          if (autoEquipEnabled && !bodyPresenceCooldown) {
+            triggerAutoEquip();
+            bodyPresenceCooldown = true;
+          }
+        }
+        isBodyDetected = true;
+        trackingStatusBadge.className = 'tracking-status-badge detected';
+        statusSymbol.textContent = '●';
+        statusMainText.textContent = 'BODY DETECTED';
+        statusSubText.textContent = `Confidence: ${(confidence * 100).toFixed(0)}% • ${count} landmarks locked`;
+        centerReticle.classList.add('hidden');
+      } else {
+        if (isBodyDetected) {
+          bodyPresenceCooldown = false; // Reset presence so next entry auto-equips
+        }
+        isBodyDetected = false;
+        trackingStatusBadge.className = 'tracking-status-badge searching';
+        statusSymbol.textContent = '○';
+        statusMainText.textContent = 'SEARCHING FOR BODY...';
+        statusSubText.textContent = 'Arahkan kamera ke tubuh manusia';
+        centerReticle.classList.remove('hidden');
+      }
+    }
+
+    // ==========================================
+    // 7. WEBCAM STREAM & REAL-TIME FRAME LOOP
+    // ==========================================
+    let isProcessingFrame = false;
+
+    async function startCamera() {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
           video: {
             facingMode: 'user',
-            width: { ideal: 1280 },
-            height: { ideal: 720 }
-          }
+            width: { ideal: 640 },
+            height: { ideal: 480 },
+            frameRate: { ideal: 30, max: 60 }
+          },
+          audio: false
         });
+
         video.srcObject = stream;
         await video.play();
-        isCameraActive = true;
-        isDemoMode = false;
-        video.style.display = 'block';
-        camToggleLabel.textContent = 'FRONT CAM';
-        btnCamToggle.classList.add('active-cyan');
-        statusTitle.textContent = 'BODY LOCK: ACTIVE';
-        statusTitle.classList.remove('scanning');
-        statusDot.classList.remove('scanning');
-        statusSub.textContent = 'Live Webcam AR Active';
-        centerReticle.classList.add('hidden');
-        if (autoEquipEnabled) {
-          triggerAutoEquip();
+        console.log('Front Camera started. Dimensions:', video.videoWidth, video.videoHeight);
+
+        // Frame analysis loop:
+        async function sendFrame() {
+          if (video.readyState >= 2 && poseDetector && !isProcessingFrame && !isTestPoseMode) {
+            isProcessingFrame = true;
+            try {
+              await poseDetector.send({ image: video });
+            } catch (err) {
+              console.warn('Pose send error:', err);
+            }
+            isProcessingFrame = false;
+          }
+          requestAnimationFrame(sendFrame);
         }
+        requestAnimationFrame(sendFrame);
+
       } catch (err) {
-        console.warn('Camera access fallback to Virtual Pose:', err);
-        fallbackToDemoMode();
+        console.warn('Webcam permission error or fallback:', err);
+        // Fallback to test pose simulator so user can test tracking immediately
+        activateTestPoseMode();
       }
     }
-
-    function stopWebcam() {
-      if (video.srcObject) {
-        video.srcObject.getTracks().forEach(t => t.stop());
-        video.srcObject = null;
-      }
-      isCameraActive = false;
-      video.style.display = 'none';
-      btnCamToggle.classList.remove('active-cyan');
-    }
-
-    function fallbackToDemoMode() {
-      stopWebcam();
-      isDemoMode = true;
-      camToggleLabel.textContent = 'DEMO: ' + POSE_MODES[poseModeIndex];
-      statusTitle.textContent = 'TEST POSE SIMULATOR';
-      statusTitle.classList.remove('scanning');
-      statusDot.classList.remove('scanning');
-      statusSub.textContent = 'Front Camera Available';
-      centerReticle.classList.add('hidden');
-    }
-
-    btnCamToggle.addEventListener('click', () => {
-      playAudio('click');
-      if (isCameraActive) {
-        fallbackToDemoMode();
-        showNotification('MODUS DEMO SIMULASI AKTIF');
-      } else {
-        startWebcam();
-        showNotification('MENGHUBUNGKAN KAMERA DEPAN...');
-      }
-    });
-
-    // Auto-request camera on initial page load
-    window.addEventListener('DOMContentLoaded', () => {
-      startWebcam();
-    });
 
     // ==========================================
-    // AUTO-EQUIP ENGINE & TRIGGERS
+    // 8. TEST POSE SIMULATOR (Fallback / Verification)
     // ==========================================
-    const btnAutoEquip = document.getElementById('btnAutoEquip');
-    const autoEquipLabel = document.getElementById('autoEquipLabel');
-
-    function triggerAutoEquip() {
-      const armor = ARMOR_LIST[currentArmorIndex];
-      isEquipped = true;
-      isEquipScanning = true;
-      scanStartTime = performance.now();
-      document.getElementById('scan-overlay').style.display = 'block';
-      playAudio('equip');
-      showNotification(`⚡ DETEKSI TUBUH: AUTO-EQUIP ${armor.name}`);
+    function activateTestPoseMode() {
+      isTestPoseMode = true;
+      document.getElementById('camLabel').textContent = 'TEST POSE';
+      showNotification(`MODE SIMULASI POSE: ${TEST_POSES[testPoseIndex]}`);
     }
 
-    btnAutoEquip.addEventListener('click', () => {
-      autoEquipEnabled = !autoEquipEnabled;
-      playAudio('click');
-      if (autoEquipEnabled) {
-        btnAutoEquip.classList.add('active-cyan');
-        autoEquipLabel.textContent = 'AUTO: ON';
-        showNotification('⚡ AUTO-EQUIP: AKTIF');
-        triggerAutoEquip();
-      } else {
-        btnAutoEquip.classList.remove('active-cyan');
-        autoEquipLabel.textContent = 'AUTO: OFF';
-        showNotification('AUTO-EQUIP: NONAKTIF');
-      }
-    });
-
-    // Next Pose Button (Demo mode stance switcher)
-    const btnNextPose = document.getElementById('btnNextPose');
-    btnNextPose.addEventListener('click', () => {
-      playAudio('click');
-      poseModeIndex = (poseModeIndex + 1) % POSE_MODES.length;
-      camToggleLabel.textContent = isDemoMode ? 'DEMO: ' + POSE_MODES[poseModeIndex] : 'FRONT CAM';
-      showNotification('POSE: ' + POSE_MODES[poseModeIndex]);
-      if (autoEquipEnabled) {
-        triggerAutoEquip();
-      }
-    });
-
-    // Bones / Skeleton Toggle
-    const btnBones = document.getElementById('btnBones');
-    btnBones.addEventListener('click', () => {
-      playAudio('click');
-      showSkeleton = !showSkeleton;
-      if (showSkeleton) {
-        btnBones.classList.add('active-green');
-        showNotification('SKELETON TRACKING: AKTIF');
-      } else {
-        btnBones.classList.remove('active-green');
-        showNotification('SKELETON: NONAKTIF');
-      }
-    });
-
-    // ==========================================
-    // ARMOR DRAWER / PANEL LOGIC
-    // ==========================================
-    const btnArmorMenu = document.getElementById('btnArmorMenu');
-    const armorDrawerBackdrop = document.getElementById('armorDrawerBackdrop');
-    const btnCloseDrawer = document.getElementById('btnCloseDrawer');
-    const btnPrevDrawer = document.getElementById('btnPrevDrawer');
-    const btnNextDrawer = document.getElementById('btnNextDrawer');
-    const drawerArmorName = document.getElementById('drawerArmorName');
-    const drawerArmorCategory = document.getElementById('drawerArmorCategory');
-    const drawerPreviewImg = document.getElementById('drawerPreviewImg');
-    const drawerStatDef = document.getElementById('drawerStatDef');
-    const drawerStatAgi = document.getElementById('drawerStatAgi');
-    const drawerStatPwr = document.getElementById('drawerStatPwr');
-    const btnDrawerEquip = document.getElementById('btnDrawerEquip');
-    const drawerEquipText = document.getElementById('drawerEquipText');
-    const armorBtnSub = document.getElementById('armorBtnSub');
-    const drawerTitleDot = document.getElementById('drawerTitleDot');
-
-    function updateDrawerUI() {
-      const a = ARMOR_LIST[currentArmorIndex];
-      drawerArmorName.textContent = a.name;
-      drawerArmorName.style.color = a.themeColor;
-      drawerArmorCategory.textContent = a.category;
-      drawerArmorCategory.style.color = a.themeColor;
-      drawerPreviewImg.src = a.preview;
-      drawerStatDef.textContent = a.def + '%';
-      drawerStatAgi.textContent = a.agi + '%';
-      drawerStatPwr.textContent = a.pwr + '%';
-      drawerTitleDot.style.background = a.themeColor;
-      armorBtnSub.textContent = isEquipped ? a.name : 'UNEQUIPPED';
-      armorBtnSub.style.color = a.themeColor;
-
-      if (a.id === 'cyber_knight') {
-        btnDrawerEquip.classList.remove('dark-knight');
-      } else {
-        btnDrawerEquip.classList.add('dark-knight');
-      }
-
-      if (isEquipped) {
-        drawerEquipText.textContent = 'EQUIPPED • RE-CALIBRATE';
-      } else {
-        drawerEquipText.textContent = 'EQUIP ' + a.name;
-      }
-    }
-
-    function openDrawer() {
-      isDrawerOpen = true;
-      armorDrawerBackdrop.classList.add('open');
-      btnArmorMenu.classList.add('open');
-      updateDrawerUI();
-      playAudio('click');
-    }
-
-    function closeDrawer() {
-      isDrawerOpen = false;
-      armorDrawerBackdrop.classList.remove('open');
-      btnArmorMenu.classList.remove('open');
-      playAudio('click');
-    }
-
-    btnArmorMenu.addEventListener('click', () => {
-      if (isDrawerOpen) closeDrawer();
-      else openDrawer();
-    });
-
-    btnCloseDrawer.addEventListener('click', closeDrawer);
-    armorDrawerBackdrop.addEventListener('click', (e) => {
-      if (e.target === armorDrawerBackdrop) closeDrawer();
-    });
-
-    btnPrevDrawer.addEventListener('click', () => {
-      currentArmorIndex = (currentArmorIndex - 1 + ARMOR_LIST.length) % ARMOR_LIST.length;
-      updateDrawerUI();
-      playAudio('click');
-      if (autoEquipEnabled) triggerAutoEquip();
-    });
-
-    btnNextDrawer.addEventListener('click', () => {
-      currentArmorIndex = (currentArmorIndex + 1) % ARMOR_LIST.length;
-      updateDrawerUI();
-      playAudio('click');
-      if (autoEquipEnabled) triggerAutoEquip();
-    });
-
-    btnDrawerEquip.addEventListener('click', () => {
-      closeDrawer();
-      triggerAutoEquip();
-    });
-
-    // ==========================================
-    // CANVAS & 60FPS AR RENDER ENGINE
-    // ==========================================
-    const canvas = document.getElementById('arCanvas');
-    const ctx = canvas.getContext('2d');
-
-    function resizeCanvas() {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
-    }
-    window.addEventListener('resize', resizeCanvas);
-    resizeCanvas();
-
-    // Body Landmark Kinematics Generator
-    function getPoseLandmarks(time) {
+    function generateSyntheticPose(time) {
       const t = time * 0.001;
       const w = canvas.width;
       const h = canvas.height;
@@ -1110,628 +1107,810 @@
       let rightAnkleX = cx + scale * 0.14;
       let rightAnkleY = cy + scale * 0.46;
 
-      // Natural breathing sway
-      const breath = Math.sin(t * 2) * (scale * 0.008);
-      shoulderY += breath;
-      headY += breath * 0.8;
-
-      const mode = POSE_MODES[poseModeIndex];
-      if (mode === 'WAVE') {
-        rightElbowY = cy - scale * 0.32;
-        rightElbowX = cx + scale * 0.30;
-        rightWristX = cx + scale * (0.32 + Math.sin(t * 5) * 0.08);
-        rightWristY = cy - scale * (0.45 + Math.cos(t * 5) * 0.03);
-      } else if (mode === 'COMBAT') {
-        leftElbowX = cx - scale * 0.12;
-        leftElbowY = cy - scale * 0.16;
-        leftWristX = cx + scale * 0.02;
-        leftWristY = cy - scale * 0.20;
-
-        rightElbowX = cx + scale * 0.14;
+      const currentTest = TEST_POSES[testPoseIndex];
+      if (currentTest === 'HANDS_UP') {
+        rightElbowY = cy - scale * 0.35;
+        rightWristY = cy - scale * 0.50;
+        leftElbowY = cy - scale * 0.35;
+        leftWristY = cy - scale * 0.50;
+      } else if (currentTest === 'COMBAT') {
+        rightElbowX = cx + scale * 0.12;
         rightElbowY = cy - scale * 0.14;
-        rightWristX = cx + scale * 0.06;
+        rightWristX = cx + scale * 0.04;
         rightWristY = cy - scale * 0.22;
-
-        leftKneeX = cx - scale * 0.18;
-        rightKneeX = cx + scale * 0.18;
-      } else if (mode === 'WALK') {
-        const walkSin = Math.sin(t * 3.5);
-        leftKneeY += walkSin * (scale * 0.04);
-        rightKneeY -= walkSin * (scale * 0.04);
-        leftAnkleY += walkSin * (scale * 0.05);
-        rightAnkleY -= walkSin * (scale * 0.05);
-        leftWristY += walkSin * (scale * 0.06);
-        rightWristY -= walkSin * (scale * 0.06);
+      } else if (currentTest === 'TILT_LEFT') {
+        shoulderY -= scale * 0.05;
+        headY += scale * 0.02;
+        leftShoulderX -= scale * 0.04;
+        rightShoulderX -= scale * 0.04;
       }
 
-      return {
-        nose: { x: cx, y: headY },
-        leftShoulder: { x: leftShoulderX, y: shoulderY },
-        rightShoulder: { x: rightShoulderX, y: shoulderY },
-        leftElbow: { x: leftElbowX, y: leftElbowY },
-        rightElbow: { x: rightElbowX, y: rightElbowY },
-        leftWrist: { x: leftWristX, y: leftWristY },
-        rightWrist: { x: rightWristX, y: rightWristY },
-        leftHip: { x: leftHipX, y: hipY },
-        rightHip: { x: rightHipX, y: hipY },
-        leftKnee: { x: leftKneeX, y: leftKneeY },
-        rightKnee: { x: rightKneeX, y: rightKneeY },
-        leftAnkle: { x: leftAnkleX, y: leftAnkleY },
-        rightAnkle: { x: rightAnkleX, y: rightAnkleY },
-        scale: scale
-      };
+      const points = [
+        { name: 'nose', x: cx, y: headY },
+        { name: 'left_eye', x: cx - 15, y: headY - 8 },
+        { name: 'right_eye', x: cx + 15, y: headY - 8 },
+        { name: 'left_ear', x: cx - 35, y: headY - 2 },
+        { name: 'right_ear', x: cx + 35, y: headY - 2 },
+        { name: 'left_shoulder', x: leftShoulderX, y: shoulderY },
+        { name: 'right_shoulder', x: rightShoulderX, y: shoulderY },
+        { name: 'left_elbow', x: leftElbowX, y: leftElbowY },
+        { name: 'right_elbow', x: rightElbowX, y: rightElbowY },
+        { name: 'left_wrist', x: leftWristX, y: leftWristY },
+        { name: 'right_wrist', x: rightWristX, y: rightWristY },
+        { name: 'left_hip', x: leftHipX, y: hipY },
+        { name: 'right_hip', x: rightHipX, y: hipY },
+        { name: 'left_knee', x: leftKneeX, y: leftKneeY },
+        { name: 'right_knee', x: rightKneeX, y: rightKneeY },
+        { name: 'left_ankle', x: leftAnkleX, y: leftAnkleY },
+        { name: 'right_ankle', x: rightAnkleX, y: rightAnkleY }
+      ];
+
+      for (let p of points) {
+        smoothPoint(p.name, p.x, p.y, 0, 0.95);
+      }
+      updateTrackingStatus(true, 0.95, points.length);
     }
 
     // ==========================================
-    // ANATOMICAL FIT ARTWORK PIPELINE
-    // ("Kayak pake armor asli")
+    // 9. AUTO-EQUIP TRIGGER & ANIMATION
     // ==========================================
-    function drawLimbSegment(ctx, p1, p2, width, fill, stroke, scanCutoff) {
-      const midY = (p1.y + p2.y) * 0.5;
-      if (midY < scanCutoff) return;
+    const scanOverlay = document.getElementById('scan-overlay');
+    const laserLine = document.getElementById('laserLine');
 
-      const angle = Math.atan2(p2.y - p1.y, p2.x - p1.x);
-      const len = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+    function triggerAutoEquip() {
+      const a = ARMOR_LIST[currentArmorIndex];
+      isEquipped = true;
+      isEquipScanning = true;
+      scanStartTime = performance.now();
+      scanOverlay.style.display = 'block';
+      playAudio('equip');
+      showNotification(`⚡ DETEKSI TUBUH: AUTO-EQUIP ${a.name}`);
+    }
+
+    // ==========================================
+    // 10. MULTI-SEGMENT ARMOR RENDERING ENGINE
+    // Each armor piece has its own transform (position, rotation, scale)
+    // based on the detected human body landmarks.
+    // ==========================================
+
+    function drawSegmentWithTransform(ctx, p1, p2, widthRatio, drawCallback) {
+      if (!p1 || !p2) return;
+      const dx = p2.x - p1.x;
+      const dy = p2.y - p1.y;
+      const length = Math.hypot(dx, dy);
+      if (length < 2) return;
+      const angle = Math.atan2(dy, dx);
 
       ctx.save();
       ctx.translate(p1.x, p1.y);
       ctx.rotate(angle);
-      ctx.fillStyle = fill;
-      ctx.strokeStyle = stroke;
-      ctx.lineWidth = 2;
-
-      ctx.beginPath();
-      ctx.roundRect(0, -width * 0.5, len, width, width * 0.3);
-      ctx.fill();
-      ctx.stroke();
+      drawCallback(ctx, length, length * widthRatio);
       ctx.restore();
     }
 
-    // Anatomical Undersuit: forms the base compression suit so armor fits physically
-    function drawAnatomicalUndersuit(ctx, pose, isCyber, scanCutoff) {
-      const { leftShoulder, rightShoulder, leftElbow, rightElbow, leftWrist, rightWrist, leftHip, rightHip, leftKnee, rightKnee, leftAnkle, rightAnkle } = pose;
+    // A. ANATOMICAL UNDERSUIT
+    function renderUndersuit(ctx, lm, isCyber, scanCutoff) {
       const baseColor = isCyber ? '#090e18' : '#0a0d14';
       const seamColor = isCyber ? 'rgba(0, 240, 255, 0.4)' : '#1e293b';
 
       ctx.save();
-      // 1. Torso compression glove
-      if (leftShoulder.y >= scanCutoff) {
-        ctx.fillStyle = baseColor;
-        ctx.strokeStyle = seamColor;
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(leftShoulder.x - 12, leftShoulder.y);
-        ctx.lineTo(rightShoulder.x + 12, rightShoulder.y);
-        ctx.lineTo(rightHip.x + 14, rightHip.y);
-        ctx.lineTo(leftHip.x - 14, leftHip.y);
-        ctx.closePath();
-        ctx.fill();
-        ctx.stroke();
+      // Torso compression suit
+      if (lm.left_shoulder && lm.right_shoulder && lm.left_hip && lm.right_hip) {
+        if (lm.left_shoulder.y >= scanCutoff) {
+          ctx.fillStyle = baseColor;
+          ctx.strokeStyle = seamColor;
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(lm.left_shoulder.x - 12, lm.left_shoulder.y);
+          ctx.lineTo(lm.right_shoulder.x + 12, lm.right_shoulder.y);
+          ctx.lineTo(lm.right_hip.x + 14, lm.right_hip.y);
+          ctx.lineTo(lm.left_hip.x - 14, lm.left_hip.y);
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+        }
       }
 
-      // 2. Arms & Legs body glove
-      drawLimbSegment(ctx, leftShoulder, leftElbow, 24, baseColor, seamColor, scanCutoff);
-      drawLimbSegment(ctx, rightShoulder, rightElbow, 24, baseColor, seamColor, scanCutoff);
-      drawLimbSegment(ctx, leftElbow, leftWrist, 18, baseColor, seamColor, scanCutoff);
-      drawLimbSegment(ctx, rightElbow, rightWrist, 18, baseColor, seamColor, scanCutoff);
+      // Limbs base suit
+      function drawBaseLimb(p1, p2, w) {
+        if (!p1 || !p2 || p1.y < scanCutoff) return;
+        drawSegmentWithTransform(ctx, p1, p2, w, (c, len, thickness) => {
+          c.fillStyle = baseColor;
+          c.strokeStyle = seamColor;
+          c.lineWidth = 2;
+          c.beginPath();
+          c.roundRect(0, -thickness * 0.5, len, thickness, thickness * 0.3);
+          c.fill();
+          c.stroke();
+        });
+      }
 
-      drawLimbSegment(ctx, leftHip, leftKnee, 26, baseColor, seamColor, scanCutoff);
-      drawLimbSegment(ctx, rightHip, rightKnee, 26, baseColor, seamColor, scanCutoff);
-      drawLimbSegment(ctx, leftKnee, leftAnkle, 20, baseColor, seamColor, scanCutoff);
-      drawLimbSegment(ctx, rightKnee, rightAnkle, 20, baseColor, seamColor, scanCutoff);
+      drawBaseLimb(lm.left_shoulder, lm.left_elbow, 0.28);
+      drawBaseLimb(lm.right_shoulder, lm.right_elbow, 0.28);
+      drawBaseLimb(lm.left_elbow, lm.left_wrist, 0.22);
+      drawBaseLimb(lm.right_elbow, lm.right_wrist, 0.22);
+      drawBaseLimb(lm.left_hip, lm.left_knee, 0.28);
+      drawBaseLimb(lm.right_hip, lm.right_knee, 0.28);
+      drawBaseLimb(lm.left_knee, lm.left_ankle, 0.22);
+      drawBaseLimb(lm.right_knee, lm.right_ankle, 0.22);
       ctx.restore();
     }
 
-    // Neck Gorget Collar: anchors armor plates between chest and helmet
-    function drawNeckGorget(ctx, leftShoulder, rightShoulder, nose, isCyber, scanCutoff) {
-      const midShoulderX = (leftShoulder.x + rightShoulder.x) * 0.5;
-      const midShoulderY = (leftShoulder.y + rightShoulder.y) * 0.5;
-      const neckY = midShoulderY - (midShoulderY - nose.y) * 0.45;
-      if (neckY < scanCutoff) return;
+    // B. HEAD ARMOR (Cowl / Visor / Helmet)
+    function renderHeadArmor(ctx, lm, isCyber, scanCutoff) {
+      if (!lm.nose || lm.nose.y < scanCutoff) return;
 
-      const w = Math.abs(rightShoulder.x - leftShoulder.x) * 0.38;
+      const nose = lm.nose;
+      let angle = 0;
+      let headScale = 50;
+
+      if (lm.left_eye && lm.right_eye) {
+        angle = Math.atan2(lm.right_eye.y - lm.left_eye.y, lm.right_eye.x - lm.left_eye.x);
+        headScale = Math.hypot(lm.right_eye.x - lm.left_eye.x, lm.right_eye.y - lm.left_eye.y) * 1.8;
+      } else if (lm.left_shoulder && lm.right_shoulder) {
+        headScale = Math.hypot(lm.right_shoulder.x - lm.left_shoulder.x, lm.right_shoulder.y - lm.left_shoulder.y) * 0.36;
+      }
+
       ctx.save();
-      ctx.fillStyle = isCyber ? '#1e293b' : '#1e222d';
-      ctx.strokeStyle = isCyber ? '#00f0ff' : '#cbd5e1';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(midShoulderX - w * 0.5, midShoulderY);
-      ctx.lineTo(midShoulderX + w * 0.5, midShoulderY);
-      ctx.lineTo(midShoulderX + w * 0.35, neckY);
-      ctx.lineTo(midShoulderX - w * 0.35, neckY);
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-      ctx.restore();
-    }
+      ctx.translate(nose.x, nose.y);
+      ctx.rotate(angle);
 
-    // ARMOR 1: DARK KNIGHT (Gothic Fantasy Steel, Cowl, Flowing Cape, Greatsword)
-    function drawDarkKnight(ctx, pose, time, scanCutoff) {
-      const t = time * 0.001;
-      const { nose, leftShoulder, rightShoulder, leftElbow, rightElbow, leftWrist, rightWrist, leftHip, rightHip, leftKnee, rightKnee, leftAnkle, rightAnkle, scale } = pose;
-
-      const chestX = (leftShoulder.x + rightShoulder.x) * 0.5;
-      const chestY = (leftShoulder.y + leftHip.y) * 0.5;
-      const hipMidX = (leftHip.x + rightHip.x) * 0.5;
-      const hipMidY = (leftHip.y + rightHip.y) * 0.5;
-
-      // 0. Anatomical Undersuit
-      drawAnatomicalUndersuit(ctx, pose, false, scanCutoff);
-
-      // 1. Flowing Midnight Cape
-      if (leftShoulder.y >= scanCutoff) {
-        ctx.save();
+      if (!isCyber) {
+        // DARK KNIGHT: Gothic Pointed Cowl & Glowing Amber Slit
         ctx.fillStyle = '#0f1117';
-        ctx.beginPath();
-        ctx.moveTo(leftShoulder.x - 10, leftShoulder.y);
-        ctx.lineTo(rightShoulder.x + 10, rightShoulder.y);
-        const capeBottomY = leftAnkle.y - 20;
-        const wave1 = Math.sin(t * 3) * 20;
-        const wave2 = Math.cos(t * 2.5) * 25;
-        ctx.quadraticCurveTo(rightShoulder.x + 50 + wave1, hipMidY + 50, rightShoulder.x + 60 + wave2, capeBottomY);
-        ctx.lineTo(leftShoulder.x - 60 + wave1, capeBottomY);
-        ctx.quadraticCurveTo(leftShoulder.x - 50 + wave2, hipMidY + 50, leftShoulder.x - 10, leftShoulder.y);
-        ctx.closePath();
-        ctx.fill();
-        ctx.strokeStyle = '#2d3342';
-        ctx.lineWidth = 2;
-        ctx.stroke();
-        ctx.restore();
-      }
-
-      // 2. Gothic Greatsword on Back
-      if (nose.y >= scanCutoff) {
-        ctx.save();
-        ctx.translate(chestX + 25, chestY - 40);
-        ctx.rotate(-0.4);
-        ctx.fillStyle = '#e2e8f0';
-        ctx.fillRect(-6, -scale * 0.45, 12, scale * 0.5);
-        ctx.fillStyle = '#1e293b';
-        ctx.fillRect(-2, -scale * 0.42, 4, scale * 0.45);
-        ctx.fillStyle = '#475569';
-        ctx.fillRect(-25, scale * 0.05, 50, 10);
-        ctx.fillStyle = '#0f172a';
-        ctx.fillRect(-4, scale * 0.07, 8, 30);
-        ctx.beginPath();
-        ctx.arc(0, scale * 0.07 + 34, 7, 0, Math.PI * 2);
-        ctx.fillStyle = '#ffb300';
-        ctx.fill();
-        ctx.restore();
-      }
-
-      // 3. Leg Greaves
-      drawLimbSegment(ctx, leftKnee, leftAnkle, 18, '#1e222d', '#94a3b8', scanCutoff);
-      drawLimbSegment(ctx, rightKnee, rightAnkle, 18, '#1e222d', '#94a3b8', scanCutoff);
-      drawLimbSegment(ctx, leftHip, leftKnee, 22, '#181b24', '#64748b', scanCutoff);
-      drawLimbSegment(ctx, rightHip, rightKnee, 22, '#181b24', '#64748b', scanCutoff);
-
-      // 4. Gothic Cuirass
-      if (chestY >= scanCutoff) {
-        ctx.save();
-        const grad = ctx.createLinearGradient(leftShoulder.x, leftShoulder.y, rightShoulder.x, hipMidY);
-        grad.addColorStop(0, '#334155');
-        grad.addColorStop(0.5, '#0f172a');
-        grad.addColorStop(1, '#1e293b');
-        ctx.fillStyle = grad;
-        ctx.strokeStyle = '#cbd5e1';
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.moveTo(leftShoulder.x, leftShoulder.y);
-        ctx.lineTo(rightShoulder.x, rightShoulder.y);
-        ctx.lineTo(rightHip.x + 10, rightHip.y);
-        ctx.lineTo(hipMidX, hipMidY + 25);
-        ctx.lineTo(leftHip.x - 10, leftHip.y);
-        ctx.closePath();
-        ctx.fill();
-        ctx.stroke();
-
-        ctx.beginPath();
-        ctx.moveTo(chestX, leftShoulder.y);
-        ctx.lineTo(chestX, hipMidY + 20);
-        ctx.strokeStyle = '#e2e8f0';
-        ctx.lineWidth = 4;
-        ctx.stroke();
-
-        ctx.beginPath();
-        ctx.arc(chestX, chestY - 10, 14, 0, Math.PI * 2);
-        ctx.strokeStyle = '#f59e0b';
-        ctx.lineWidth = 2;
-        ctx.stroke();
-        ctx.restore();
-      }
-
-      // 5. Spiked Multi-tiered Pauldrons
-      if (leftShoulder.y >= scanCutoff) {
-        drawSpikedPauldron(ctx, leftShoulder.x, leftShoulder.y, -1);
-        drawSpikedPauldron(ctx, rightShoulder.x, rightShoulder.y, 1);
-      }
-
-      // 6. Arm Vambraces & Gauntlets
-      drawLimbSegment(ctx, leftShoulder, leftElbow, 16, '#1e222d', '#94a3b8', scanCutoff);
-      drawLimbSegment(ctx, rightShoulder, rightElbow, 16, '#1e222d', '#94a3b8', scanCutoff);
-      drawLimbSegment(ctx, leftElbow, leftWrist, 14, '#334155', '#e2e8f0', scanCutoff);
-      drawLimbSegment(ctx, rightElbow, rightWrist, 14, '#334155', '#e2e8f0', scanCutoff);
-
-      // 6.5 Neck Gorget
-      drawNeckGorget(ctx, leftShoulder, rightShoulder, nose, false, scanCutoff);
-
-      // 7. Dark Midnight Cowl & Gothic Helmet
-      if (nose.y >= scanCutoff) {
-        ctx.save();
-        const headRadius = scale * 0.11;
-        ctx.fillStyle = '#0f1117';
-        ctx.beginPath();
-        ctx.moveTo(nose.x - headRadius * 1.3, nose.y + headRadius * 0.8);
-        ctx.lineTo(nose.x, nose.y - headRadius * 1.55);
-        ctx.lineTo(nose.x + headRadius * 1.3, nose.y + headRadius * 0.8);
-        ctx.closePath();
-        ctx.fill();
         ctx.strokeStyle = '#334155';
         ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(-headScale * 0.8, headScale * 0.5);
+        ctx.lineTo(0, -headScale * 1.2);
+        ctx.lineTo(headScale * 0.8, headScale * 0.5);
+        ctx.closePath();
+        ctx.fill();
         ctx.stroke();
 
         ctx.fillStyle = '#1e293b';
-        ctx.beginPath();
-        ctx.arc(nose.x, nose.y, headRadius * 0.85, 0, Math.PI * 2);
-        ctx.fill();
         ctx.strokeStyle = '#cbd5e1';
-        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(0, 0, headScale * 0.65, 0, Math.PI * 2);
+        ctx.fill();
         ctx.stroke();
 
-        // Eye Slit Visor
+        // Visor slit
         ctx.fillStyle = '#000000';
-        ctx.fillRect(nose.x - headRadius * 0.5, nose.y - 4, headRadius, 7);
+        ctx.fillRect(-headScale * 0.35, -4, headScale * 0.7, 8);
         ctx.fillStyle = '#ffb300';
         ctx.shadowColor = '#ffb300';
         ctx.shadowBlur = 10;
-        ctx.fillRect(nose.x - headRadius * 0.35, nose.y - 2, headRadius * 0.7, 3);
-        ctx.restore();
-      }
-    }
-
-    function drawSpikedPauldron(ctx, x, y, dir) {
-      ctx.save();
-      ctx.translate(x, y);
-      ctx.fillStyle = '#1e293b';
-      ctx.strokeStyle = '#cbd5e1';
-      ctx.lineWidth = 2;
-
-      ctx.beginPath();
-      ctx.moveTo(0, 0);
-      ctx.lineTo(35 * dir, -20);
-      ctx.lineTo(45 * dir, 10);
-      ctx.lineTo(10 * dir, 30);
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-
-      ctx.beginPath();
-      ctx.moveTo(25 * dir, -15);
-      ctx.lineTo(55 * dir, -35);
-      ctx.lineTo(40 * dir, -10);
-      ctx.fillStyle = '#cbd5e1';
-      ctx.fill();
-      ctx.stroke();
-      ctx.restore();
-    }
-
-    // ARMOR 2: CYBER KNIGHT (Ceramic Exosuit, Cyan Conduits, Arc Reactor, V-Visor)
-    function drawCyberKnight(ctx, pose, time, scanCutoff) {
-      const t = time * 0.001;
-      const { nose, leftShoulder, rightShoulder, leftElbow, rightElbow, leftWrist, rightWrist, leftHip, rightHip, leftKnee, rightKnee, leftAnkle, rightAnkle, scale } = pose;
-
-      const chestX = (leftShoulder.x + rightShoulder.x) * 0.5;
-      const chestY = (leftShoulder.y + leftHip.y) * 0.5;
-      const hipMidX = (leftHip.x + rightHip.x) * 0.5;
-      const hipMidY = (leftHip.y + rightHip.y) * 0.5;
-
-      // 0. Anatomical Nano-Suit
-      drawAnatomicalUndersuit(ctx, pose, true, scanCutoff);
-
-      // 1. Ceramic Exosuit Legs
-      drawCyberLimb(ctx, leftKnee, leftAnkle, 20, scanCutoff, t);
-      drawCyberLimb(ctx, rightKnee, rightAnkle, 20, scanCutoff, t);
-      drawCyberLimb(ctx, leftHip, leftKnee, 24, scanCutoff, t);
-      drawCyberLimb(ctx, rightHip, rightKnee, 24, scanCutoff, t);
-
-      // 2. Torso Exosuit & Arc Reactor
-      if (chestY >= scanCutoff) {
-        ctx.save();
-        ctx.fillStyle = '#f8fafc';
-        ctx.strokeStyle = '#00f0ff';
-        ctx.lineWidth = 2;
-        ctx.shadowColor = 'rgba(0, 240, 255, 0.4)';
-        ctx.shadowBlur = 8;
-        ctx.beginPath();
-        ctx.moveTo(leftShoulder.x - 5, leftShoulder.y);
-        ctx.lineTo(rightShoulder.x + 5, rightShoulder.y);
-        ctx.lineTo(rightHip.x + 8, rightHip.y);
-        ctx.lineTo(hipMidX, hipMidY + 15);
-        ctx.lineTo(leftHip.x - 8, leftHip.y);
-        ctx.closePath();
-        ctx.fill();
-        ctx.stroke();
-
-        ctx.fillStyle = '#0f172a';
-        ctx.beginPath();
-        ctx.moveTo(chestX - 25, chestY - 15);
-        ctx.lineTo(chestX + 25, chestY - 15);
-        ctx.lineTo(chestX + 15, chestY + 25);
-        ctx.lineTo(chestX - 15, chestY + 25);
-        ctx.closePath();
-        ctx.fill();
-
-        // Pulsing Arc Reactor
-        const pulse = 1 + Math.sin(t * 6) * 0.15;
-        const reactorRadius = 16 * pulse;
-        ctx.beginPath();
-        ctx.arc(chestX, chestY - 5, reactorRadius, 0, Math.PI * 2);
-        ctx.fillStyle = '#00f0ff';
-        ctx.shadowColor = '#00f0ff';
-        ctx.shadowBlur = 24;
-        ctx.fill();
-
-        ctx.beginPath();
-        ctx.arc(chestX, chestY - 5, reactorRadius * 0.5, 0, Math.PI * 2);
-        ctx.fillStyle = '#ffffff';
-        ctx.fill();
-
-        ctx.beginPath();
-        ctx.moveTo(chestX, chestY - 5);
-        ctx.lineTo(leftShoulder.x, leftShoulder.y);
-        ctx.moveTo(chestX, chestY - 5);
-        ctx.lineTo(rightShoulder.x, rightShoulder.y);
-        ctx.strokeStyle = '#00f0ff';
-        ctx.lineWidth = 2;
-        ctx.stroke();
-        ctx.restore();
-      }
-
-      // 3. Cyber Pauldrons
-      if (leftShoulder.y >= scanCutoff) {
-        drawCyberPauldron(ctx, leftShoulder.x, leftShoulder.y, -1, t);
-        drawCyberPauldron(ctx, rightShoulder.x, rightShoulder.y, 1, t);
-      }
-
-      // 4. Arms & Gauntlets
-      drawCyberLimb(ctx, leftShoulder, leftElbow, 18, scanCutoff, t);
-      drawCyberLimb(ctx, rightShoulder, rightElbow, 18, scanCutoff, t);
-      drawCyberLimb(ctx, leftElbow, leftWrist, 16, scanCutoff, t);
-      drawCyberLimb(ctx, rightElbow, rightWrist, 16, scanCutoff, t);
-
-      // 4.5 Neck Gorget
-      drawNeckGorget(ctx, leftShoulder, rightShoulder, nose, true, scanCutoff);
-
-      // 5. Aerodynamic Helmet & Glowing Cyan Chevron V-Visor
-      if (nose.y >= scanCutoff) {
-        ctx.save();
-        const headRadius = scale * 0.11;
+        ctx.fillRect(-headScale * 0.25, -2, headScale * 0.5, 4);
+      } else {
+        // CYBER KNIGHT: Ceramic Helmet with Glowing Cyan V-Visor
         ctx.fillStyle = '#f8fafc';
         ctx.strokeStyle = '#00f0ff';
         ctx.lineWidth = 2.5;
         ctx.shadowColor = '#00f0ff';
         ctx.shadowBlur = 10;
         ctx.beginPath();
-        ctx.arc(nose.x, nose.y, headRadius, 0, Math.PI * 2);
+        ctx.arc(0, 0, headScale * 0.65, 0, Math.PI * 2);
         ctx.fill();
         ctx.stroke();
 
         ctx.fillStyle = '#0f172a';
-        ctx.fillRect(nose.x - headRadius - 8, nose.y - 12, 10, 24);
-        ctx.fillRect(nose.x + headRadius - 2, nose.y - 12, 10, 24);
-
-        // Glowing Chevron V-Visor
-        ctx.shadowColor = '#00f0ff';
-        ctx.shadowBlur = 20;
-        ctx.fillStyle = '#00f0ff';
         ctx.beginPath();
-        ctx.moveTo(nose.x - headRadius * 0.65, nose.y - 10);
-        ctx.lineTo(nose.x, nose.y + headRadius * 0.25);
-        ctx.lineTo(nose.x + headRadius * 0.65, nose.y - 10);
-        ctx.lineTo(nose.x + headRadius * 0.5, nose.y - 14);
-        ctx.lineTo(nose.x, nose.y);
-        ctx.lineTo(nose.x - headRadius * 0.5, nose.y - 14);
+        ctx.moveTo(-headScale * 0.45, -headScale * 0.2);
+        ctx.lineTo(0, headScale * 0.3);
+        ctx.lineTo(headScale * 0.45, -headScale * 0.2);
+        ctx.lineTo(headScale * 0.3, -headScale * 0.2);
+        ctx.lineTo(0, headScale * 0.15);
+        ctx.lineTo(-headScale * 0.3, -headScale * 0.2);
         ctx.closePath();
         ctx.fill();
-        ctx.restore();
+
+        ctx.fillStyle = '#00f0ff';
+        ctx.shadowColor = '#00f0ff';
+        ctx.shadowBlur = 16;
+        ctx.fill();
       }
+      ctx.restore();
     }
 
-    function drawCyberLimb(ctx, p1, p2, width, scanCutoff, t) {
-      const midY = (p1.y + p2.y) * 0.5;
-      if (midY < scanCutoff) return;
+    // C. CHEST ARMOR (Cuirass & Reactor)
+    function renderChestArmor(ctx, lm, isCyber, scanCutoff, time) {
+      if (!lm.left_shoulder || !lm.right_shoulder || !lm.left_hip || !lm.right_hip) return;
 
-      const angle = Math.atan2(p2.y - p1.y, p2.x - p1.x);
-      const len = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+      const midShoulder = {
+        x: (lm.left_shoulder.x + lm.right_shoulder.x) * 0.5,
+        y: (lm.left_shoulder.y + lm.right_shoulder.y) * 0.5
+      };
+      const midHip = {
+        x: (lm.left_hip.x + lm.right_hip.x) * 0.5,
+        y: (lm.left_hip.y + lm.right_hip.y) * 0.5
+      };
+
+      const chestCenter = {
+        x: midShoulder.x * 0.6 + midHip.x * 0.4,
+        y: midShoulder.y * 0.6 + midHip.y * 0.4
+      };
+
+      if (chestCenter.y < scanCutoff) return;
+
+      const shoulderDist = Math.hypot(lm.right_shoulder.x - lm.left_shoulder.x, lm.right_shoulder.y - lm.left_shoulder.y);
+      const torsoAngle = Math.atan2(lm.right_shoulder.y - lm.left_shoulder.y, lm.right_shoulder.x - lm.left_shoulder.x);
 
       ctx.save();
-      ctx.translate(p1.x, p1.y);
+      ctx.translate(chestCenter.x, chestCenter.y);
+      ctx.rotate(torsoAngle);
+
+      const w = shoulderDist * 0.88;
+      const h = Math.hypot(midHip.x - midShoulder.x, midHip.y - midShoulder.y) * 0.75;
+
+      if (!isCyber) {
+        // DARK KNIGHT: Heavy Gothic Plate Cuirass
+        const grad = ctx.createLinearGradient(-w * 0.5, -h * 0.5, w * 0.5, h * 0.5);
+        grad.addColorStop(0, '#334155');
+        grad.addColorStop(0.5, '#0f172a');
+        grad.addColorStop(1, '#1e293b');
+        ctx.fillStyle = grad;
+        ctx.strokeStyle = '#cbd5e1';
+        ctx.lineWidth = 3;
+
+        ctx.beginPath();
+        ctx.moveTo(-w * 0.5, -h * 0.5);
+        ctx.lineTo(w * 0.5, -h * 0.5);
+        ctx.lineTo(w * 0.35, h * 0.5);
+        ctx.lineTo(0, h * 0.65);
+        ctx.lineTo(-w * 0.35, h * 0.5);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        // Central steel keel line
+        ctx.beginPath();
+        ctx.moveTo(0, -h * 0.5);
+        ctx.lineTo(0, h * 0.65);
+        ctx.strokeStyle = '#e2e8f0';
+        ctx.lineWidth = 3.5;
+        ctx.stroke();
+
+        // Amber emblem medallion
+        ctx.beginPath();
+        ctx.arc(0, -h * 0.1, 14, 0, Math.PI * 2);
+        ctx.strokeStyle = '#ffb300';
+        ctx.lineWidth = 2.5;
+        ctx.stroke();
+      } else {
+        // CYBER KNIGHT: High-Tech Ceramic Cuirass & Pulsing Arc Reactor
+        ctx.fillStyle = '#f8fafc';
+        ctx.strokeStyle = '#00f0ff';
+        ctx.lineWidth = 2.5;
+        ctx.shadowColor = 'rgba(0, 240, 255, 0.5)';
+        ctx.shadowBlur = 10;
+
+        ctx.beginPath();
+        ctx.moveTo(-w * 0.48, -h * 0.45);
+        ctx.lineTo(w * 0.48, -h * 0.45);
+        ctx.lineTo(w * 0.32, h * 0.48);
+        ctx.lineTo(0, h * 0.6);
+        ctx.lineTo(-w * 0.32, h * 0.48);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        // Dark armor under-inlay
+        ctx.fillStyle = '#0f172a';
+        ctx.beginPath();
+        ctx.moveTo(-w * 0.28, -h * 0.25);
+        ctx.lineTo(w * 0.28, -h * 0.25);
+        ctx.lineTo(w * 0.18, h * 0.25);
+        ctx.lineTo(-w * 0.18, h * 0.25);
+        ctx.closePath();
+        ctx.fill();
+
+        // Glowing Pulsing Arc Reactor
+        const pulse = 1 + Math.sin(time * 0.006) * 0.15;
+        const r = 16 * pulse;
+        ctx.beginPath();
+        ctx.arc(0, -h * 0.05, r, 0, Math.PI * 2);
+        ctx.fillStyle = '#00f0ff';
+        ctx.shadowColor = '#00f0ff';
+        ctx.shadowBlur = 25;
+        ctx.fill();
+
+        ctx.beginPath();
+        ctx.arc(0, -h * 0.05, r * 0.5, 0, Math.PI * 2);
+        ctx.fillStyle = '#ffffff';
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+
+    // D. PAULDRONS (Shoulder Armor)
+    function renderPauldron(ctx, shoulder, elbow, isLeft, isCyber, scanCutoff) {
+      if (!shoulder || shoulder.y < scanCutoff) return;
+
+      let angle = 0;
+      if (elbow) {
+        angle = Math.atan2(elbow.y - shoulder.y, elbow.x - shoulder.x) - (isLeft ? Math.PI * 0.5 : -Math.PI * 0.5);
+      }
+
+      ctx.save();
+      ctx.translate(shoulder.x, shoulder.y);
       ctx.rotate(angle);
-      ctx.fillStyle = '#f8fafc';
-      ctx.strokeStyle = '#00f0ff';
-      ctx.lineWidth = 1.5;
-      ctx.shadowColor = 'rgba(0, 240, 255, 0.4)';
-      ctx.shadowBlur = 6;
 
-      ctx.beginPath();
-      ctx.roundRect(0, -width * 0.5, len, width, 6);
-      ctx.fill();
-      ctx.stroke();
+      const dir = isLeft ? -1 : 1;
 
-      // Pulsing cyan energy stripe
-      const stripePulse = 0.5 + Math.sin(t * 8) * 0.5;
-      ctx.fillStyle = `rgba(0, 240, 255, ${0.4 + stripePulse * 0.6})`;
-      ctx.fillRect(len * 0.2, -1.5, len * 0.6, 3);
+      if (!isCyber) {
+        // Dark Knight Spiked Pauldron
+        ctx.fillStyle = '#1e293b';
+        ctx.strokeStyle = '#cbd5e1';
+        ctx.lineWidth = 2;
+
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(35 * dir, -22);
+        ctx.lineTo(48 * dir, 12);
+        ctx.lineTo(12 * dir, 32);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.moveTo(25 * dir, -16);
+        ctx.lineTo(58 * dir, -36);
+        ctx.lineTo(42 * dir, -10);
+        ctx.fillStyle = '#cbd5e1';
+        ctx.fill();
+        ctx.stroke();
+      } else {
+        // Cyber Knight Angular Pauldron
+        ctx.fillStyle = '#f8fafc';
+        ctx.strokeStyle = '#00f0ff';
+        ctx.lineWidth = 2.5;
+        ctx.shadowColor = '#00f0ff';
+        ctx.shadowBlur = 10;
+
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(34 * dir, -18);
+        ctx.lineTo(44 * dir, 14);
+        ctx.lineTo(14 * dir, 28);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        // Energy conduit vent
+        ctx.fillStyle = '#00f0ff';
+        ctx.fillRect(8 * dir, -4, 20 * dir, 3);
+      }
       ctx.restore();
     }
 
-    function drawCyberPauldron(ctx, x, y, dir, t) {
+    // E. ARMS (Upper Arm & Forearm Gauntlet)
+    function renderArmArmor(ctx, p1, p2, isGauntlet, isCyber, scanCutoff) {
+      if (!p1 || !p2 || p1.y < scanCutoff) return;
+
+      drawSegmentWithTransform(ctx, p1, p2, 0.28, (c, len, thickness) => {
+        if (!isCyber) {
+          // Dark Knight Steel Plate Vambrace
+          const grad = c.createLinearGradient(0, -thickness * 0.5, 0, thickness * 0.5);
+          grad.addColorStop(0, '#475569');
+          grad.addColorStop(0.5, '#1e293b');
+          grad.addColorStop(1, '#334155');
+          c.fillStyle = grad;
+          c.strokeStyle = '#cbd5e1';
+          c.lineWidth = 2;
+
+          c.beginPath();
+          c.roundRect(len * 0.08, -thickness * 0.5, len * 0.84, thickness, thickness * 0.25);
+          c.fill();
+          c.stroke();
+
+          // Steel ridge
+          c.beginPath();
+          c.moveTo(len * 0.1, 0);
+          c.lineTo(len * 0.9, 0);
+          c.strokeStyle = '#e2e8f0';
+          c.lineWidth = 2;
+          c.stroke();
+        } else {
+          // Cyber Knight Exosuit Conduit
+          c.fillStyle = '#f8fafc';
+          c.strokeStyle = '#00f0ff';
+          c.lineWidth = 2;
+          c.shadowColor = '#00f0ff';
+          c.shadowBlur = 8;
+
+          c.beginPath();
+          c.roundRect(len * 0.08, -thickness * 0.48, len * 0.84, thickness * 0.96, thickness * 0.25);
+          c.fill();
+          c.stroke();
+
+          // Cyan glowing light conduit
+          c.fillStyle = '#00f0ff';
+          c.fillRect(len * 0.2, -1.5, len * 0.6, 3);
+        }
+      });
+    }
+
+    // F. WAIST & FAULDS
+    function renderWaistFaulds(ctx, lm, isCyber, scanCutoff) {
+      if (!lm.left_hip || !lm.right_hip || lm.left_hip.y < scanCutoff) return;
+
+      const midHip = {
+        x: (lm.left_hip.x + lm.right_hip.x) * 0.5,
+        y: (lm.left_hip.y + lm.right_hip.y) * 0.5
+      };
+      const angle = Math.atan2(lm.right_hip.y - lm.left_hip.y, lm.right_hip.x - lm.left_hip.x);
+      const hipWidth = Math.hypot(lm.right_hip.x - lm.left_hip.x, lm.right_hip.y - lm.left_hip.y);
+
       ctx.save();
-      ctx.translate(x, y);
-      ctx.fillStyle = '#f8fafc';
-      ctx.strokeStyle = '#00f0ff';
-      ctx.lineWidth = 2;
-      ctx.shadowColor = '#00f0ff';
-      ctx.shadowBlur = 10;
+      ctx.translate(midHip.x, midHip.y);
+      ctx.rotate(angle);
 
-      ctx.beginPath();
-      ctx.moveTo(0, 0);
-      ctx.lineTo(40 * dir, -25);
-      ctx.lineTo(55 * dir, 5);
-      ctx.lineTo(15 * dir, 25);
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
+      const w = hipWidth * 1.1;
+      const h = 28;
 
-      ctx.fillStyle = '#00f0ff';
-      ctx.fillRect(15 * dir, -10, 20 * dir, 3);
+      if (!isCyber) {
+        ctx.fillStyle = '#1e293b';
+        ctx.strokeStyle = '#cbd5e1';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.roundRect(-w * 0.5, -h * 0.5, w, h, 6);
+        ctx.fill();
+        ctx.stroke();
+      } else {
+        ctx.fillStyle = '#0f172a';
+        ctx.strokeStyle = '#00f0ff';
+        ctx.lineWidth = 2;
+        ctx.shadowColor = '#00f0ff';
+        ctx.shadowBlur = 6;
+        ctx.beginPath();
+        ctx.roundRect(-w * 0.5, -h * 0.5, w, h, 6);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = '#00f0ff';
+        ctx.fillRect(-w * 0.35, -2, w * 0.7, 4);
+      }
       ctx.restore();
     }
 
-    // Skeleton Bones Overlay
-    function drawSkeleton(ctx, pose) {
+    // G. LEGS (Thigh Greaves & Calf Sabaton Boots)
+    function renderLegArmor(ctx, p1, p2, isCalf, isCyber, scanCutoff) {
+      if (!p1 || !p2 || p1.y < scanCutoff) return;
+
+      drawSegmentWithTransform(ctx, p1, p2, 0.3, (c, len, thickness) => {
+        if (!isCyber) {
+          c.fillStyle = '#1e222d';
+          c.strokeStyle = '#94a3b8';
+          c.lineWidth = 2;
+          c.beginPath();
+          c.roundRect(len * 0.08, -thickness * 0.5, len * 0.84, thickness, thickness * 0.25);
+          c.fill();
+          c.stroke();
+        } else {
+          c.fillStyle = '#f8fafc';
+          c.strokeStyle = '#00f0ff';
+          c.lineWidth = 2;
+          c.shadowColor = '#00f0ff';
+          c.shadowBlur = 6;
+          c.beginPath();
+          c.roundRect(len * 0.08, -thickness * 0.5, len * 0.84, thickness, thickness * 0.25);
+          c.fill();
+          c.stroke();
+
+          c.fillStyle = '#00f0ff';
+          c.fillRect(len * 0.25, -2, len * 0.5, 3);
+        }
+      });
+    }
+
+    // H. KNEE GUARDS
+    function renderKneeGuard(ctx, knee, isCyber, scanCutoff) {
+      if (!knee || knee.y < scanCutoff) return;
       ctx.save();
+      ctx.translate(knee.x, knee.y);
+      if (!isCyber) {
+        ctx.fillStyle = '#334155';
+        ctx.strokeStyle = '#cbd5e1';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(0, 0, 15, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      } else {
+        ctx.fillStyle = '#0f172a';
+        ctx.strokeStyle = '#00f0ff';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(0, 0, 14, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    // ==========================================
+    // 11. DEBUG SKELETON RENDERER
+    // Renders every detected landmark point & bone line
+    // ==========================================
+    function renderDebugSkeleton(ctx, lm) {
+      const bones = [
+        ['left_shoulder', 'right_shoulder'],
+        ['left_shoulder', 'left_elbow'],
+        ['left_elbow', 'left_wrist'],
+        ['right_shoulder', 'right_elbow'],
+        ['right_elbow', 'right_wrist'],
+        ['left_shoulder', 'left_hip'],
+        ['right_shoulder', 'right_hip'],
+        ['left_hip', 'right_hip'],
+        ['left_hip', 'left_knee'],
+        ['left_knee', 'left_ankle'],
+        ['right_hip', 'right_knee'],
+        ['right_knee', 'right_ankle'],
+        ['nose', 'left_shoulder'],
+        ['nose', 'right_shoulder']
+      ];
+
+      ctx.save();
+      // Draw Bone Connecting Lines
       ctx.strokeStyle = '#00ff66';
-      ctx.lineWidth = 2;
+      ctx.lineWidth = 2.5;
       ctx.shadowColor = '#00ff66';
       ctx.shadowBlur = 8;
-      ctx.fillStyle = '#ffffff';
 
-      const joints = [
-        pose.nose, pose.leftShoulder, pose.rightShoulder,
-        pose.leftElbow, pose.rightElbow, pose.leftWrist, pose.rightWrist,
-        pose.leftHip, pose.rightHip, pose.leftKnee, pose.rightKnee,
-        pose.leftAnkle, pose.rightAnkle
-      ];
+      for (let b of bones) {
+        const p1 = lm[b[0]];
+        const p2 = lm[b[1]];
+        if (p1 && p2) {
+          ctx.beginPath();
+          ctx.moveTo(p1.x, p1.y);
+          ctx.lineTo(p2.x, p2.y);
+          ctx.stroke();
+        }
+      }
 
-      const bones = [
-        [pose.leftShoulder, pose.rightShoulder],
-        [pose.leftShoulder, pose.leftElbow],
-        [pose.leftElbow, pose.leftWrist],
-        [pose.rightShoulder, pose.rightElbow],
-        [pose.rightElbow, pose.rightWrist],
-        [pose.leftShoulder, pose.leftHip],
-        [pose.rightShoulder, pose.rightHip],
-        [pose.leftHip, pose.rightHip],
-        [pose.leftHip, pose.leftKnee],
-        [pose.leftKnee, pose.leftAnkle],
-        [pose.rightHip, pose.rightKnee],
-        [pose.rightKnee, pose.rightAnkle]
-      ];
+      // Draw Landmark Joint Dots
+      for (let key in lm) {
+        const pt = lm[key];
+        if (!pt) continue;
 
-      bones.forEach(([a, b]) => {
+        ctx.fillStyle = '#00f0ff';
+        ctx.shadowColor = '#00f0ff';
+        ctx.shadowBlur = 10;
         ctx.beginPath();
-        ctx.moveTo(a.x, a.y);
-        ctx.lineTo(b.x, b.y);
-        ctx.stroke();
-      });
-
-      joints.forEach(j => {
-        ctx.beginPath();
-        ctx.arc(j.x, j.y, 4, 0, Math.PI * 2);
+        ctx.arc(pt.x, pt.y, 5.5, 0, Math.PI * 2);
         ctx.fill();
-      });
+
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(pt.x, pt.y, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Name tag
+        ctx.fillStyle = 'rgba(0, 255, 102, 0.85)';
+        ctx.font = '9px Share Tech Mono, monospace';
+        ctx.fillText(key.toUpperCase(), pt.x + 8, pt.y - 4);
+      }
       ctx.restore();
     }
 
     // ==========================================
-    // MAIN 60 FPS RENDER LOOP
+    // 12. MAIN 60FPS AR RENDERING LOOP
     // ==========================================
-    function renderLoop(now) {
+    function mainRenderLoop(time) {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // 1. Draw live camera video feed if active
-      if (isCameraActive && video.readyState >= 2) {
-        ctx.save();
-        ctx.translate(canvas.width, 0);
-        ctx.scale(-1, 1);
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        ctx.restore();
-      } else {
-        // Holographic Holodeck sci-fi backdrop (when demo mode)
-        ctx.save();
-        ctx.fillStyle = '#030712';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-        ctx.strokeStyle = 'rgba(0, 240, 255, 0.12)';
-        ctx.lineWidth = 1;
-        const gridY = canvas.height * 0.76;
-        for (let i = -10; i <= 10; i++) {
-          ctx.beginPath();
-          ctx.moveTo(canvas.width * 0.5 + i * 40, gridY);
-          ctx.lineTo(canvas.width * 0.5 + i * 180, canvas.height);
-          ctx.stroke();
-        }
-        for (let y = gridY; y <= canvas.height; y += 22) {
-          ctx.beginPath();
-          ctx.moveTo(0, y);
-          ctx.lineTo(canvas.width, y);
-          ctx.stroke();
-        }
-        ctx.restore();
+      if (isTestPoseMode) {
+        generateSyntheticPose(time);
       }
 
-      // 2. Obtain Body Kinematics
-      const pose = getPoseLandmarks(now);
+      const lm = smoothedLandmarks;
+      const isCyber = (ARMOR_LIST[currentArmorIndex].id === 'cyber_knight');
 
-      // 3. Feet-to-Head Laser Scanline Animation
-      let scanCutoffY = 0;
+      // Scanning cutoff calculation
+      let scanCutoff = -100;
       if (isEquipScanning) {
-        const elapsed = now - scanStartTime;
-        const progress = Math.min(1.0, elapsed / SCAN_DURATION);
-        const feetY = pose.leftAnkle.y + 40;
-        const headTopY = pose.nose.y - pose.scale * 0.2;
-        scanCutoffY = feetY - (feetY - headTopY) * progress;
+        const elapsed = performance.now() - scanStartTime;
+        scanProgress = Math.min(1.0, elapsed / SCAN_DURATION);
+        scanCutoff = canvas.height * (1.05 - scanProgress * 1.15);
+        laserLine.style.top = scanCutoff + 'px';
 
-        const laserLine = document.getElementById('laserLine');
-        laserLine.style.top = scanCutoffY + 'px';
-
-        ctx.save();
-        ctx.fillStyle = ARMOR_LIST[currentArmorIndex].id === 'cyber_knight' ? 'rgba(0, 240, 255, 0.18)' : 'rgba(203, 213, 225, 0.18)';
-        ctx.fillRect(0, scanCutoffY, canvas.width, canvas.height - scanCutoffY);
-
-        ctx.strokeStyle = ARMOR_LIST[currentArmorIndex].id === 'cyber_knight' ? '#00f0ff' : '#cbd5e1';
-        ctx.shadowColor = ctx.strokeStyle;
-        ctx.shadowBlur = 18;
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.moveTo(0, scanCutoffY);
-        ctx.lineTo(canvas.width, scanCutoffY);
-        ctx.stroke();
-        ctx.restore();
-
-        if (progress >= 1.0) {
+        if (scanProgress >= 1.0) {
           isEquipScanning = false;
-          document.getElementById('scan-overlay').style.display = 'none';
+          scanOverlay.style.display = 'none';
           showNotification(`✅ ARMOR RIGGED TO BODY • ${ARMOR_LIST[currentArmorIndex].name}`);
         }
       }
 
-      // 4. Render Wearable Armor
-      if (isEquipped) {
-        const armor = ARMOR_LIST[currentArmorIndex];
-        if (armor.id === 'dark_knight') {
-          drawDarkKnight(ctx, pose, now, scanCutoffY);
-        } else {
-          drawCyberKnight(ctx, pose, now, scanCutoffY);
-        }
+      // If body detected & equipped, draw the multi-part articulated armor!
+      if (isBodyDetected && isEquipped && lm.left_shoulder && lm.right_shoulder) {
+        // 1. Base Undersuit (bridges all plates naturally)
+        renderUndersuit(ctx, lm, isCyber, scanCutoff);
+
+        // 2. Torso Cuirass
+        renderChestArmor(ctx, lm, isCyber, scanCutoff, time);
+
+        // 3. Waist Faulds
+        renderWaistFaulds(ctx, lm, isCyber, scanCutoff);
+
+        // 4. Arms (Upper arms, couters, gauntlets)
+        renderArmArmor(ctx, lm.left_shoulder, lm.left_elbow, false, isCyber, scanCutoff);
+        renderArmArmor(ctx, lm.left_elbow, lm.left_wrist, true, isCyber, scanCutoff);
+        renderArmArmor(ctx, lm.right_shoulder, lm.right_elbow, false, isCyber, scanCutoff);
+        renderArmArmor(ctx, lm.right_elbow, lm.right_wrist, true, isCyber, scanCutoff);
+
+        // 5. Pauldrons (Shoulders)
+        renderPauldron(ctx, lm.left_shoulder, lm.left_elbow, true, isCyber, scanCutoff);
+        renderPauldron(ctx, lm.right_shoulder, lm.right_elbow, false, isCyber, scanCutoff);
+
+        // 6. Legs (Thighs, Knees, Calves)
+        renderLegArmor(ctx, lm.left_hip, lm.left_knee, false, isCyber, scanCutoff);
+        renderKneeGuard(ctx, lm.left_knee, isCyber, scanCutoff);
+        renderLegArmor(ctx, lm.left_knee, lm.left_ankle, true, isCyber, scanCutoff);
+
+        renderLegArmor(ctx, lm.right_hip, lm.right_knee, false, isCyber, scanCutoff);
+        renderKneeGuard(ctx, lm.right_knee, isCyber, scanCutoff);
+        renderLegArmor(ctx, lm.right_knee, lm.right_ankle, true, isCyber, scanCutoff);
+
+        // 7. Head (Helmet / Visor)
+        renderHeadArmor(ctx, lm, isCyber, scanCutoff);
       }
 
-      // 5. Render Skeleton if toggled
-      if (showSkeleton) {
-        drawSkeleton(ctx, pose);
+      // DEBUG SKELETON OVERLAY (When enabled)
+      if (isDebugMode && isBodyDetected) {
+        renderDebugSkeleton(ctx, lm);
       }
 
-      requestAnimationFrame(renderLoop);
+      requestAnimationFrame(mainRenderLoop);
+    }
+    requestAnimationFrame(mainRenderLoop);
+
+    // ==========================================
+    // 13. UI CONTROLLER BINDINGS
+    // ==========================================
+    const btnDebugToggle = document.getElementById('btnDebugToggle');
+    const debugBtnLabel = document.getElementById('debugBtnLabel');
+
+    btnDebugToggle.addEventListener('click', () => {
+      playAudio('click');
+      isDebugMode = !isDebugMode;
+      if (isDebugMode) {
+        btnDebugToggle.classList.add('active-green');
+        debugBtnLabel.textContent = 'DEBUG: ON';
+        showNotification('DEBUG SKELETON: AKTIF');
+      } else {
+        btnDebugToggle.classList.remove('active-green');
+        debugBtnLabel.textContent = 'DEBUG: OFF';
+        showNotification('DEBUG SKELETON: NONAKTIF');
+      }
+    });
+
+    const btnAutoEquip = document.getElementById('btnAutoEquip');
+    const autoEquipLabel = document.getElementById('autoEquipLabel');
+
+    btnAutoEquip.addEventListener('click', () => {
+      playAudio('click');
+      autoEquipEnabled = !autoEquipEnabled;
+      if (autoEquipEnabled) {
+        btnAutoEquip.classList.add('active-cyan');
+        autoEquipLabel.textContent = 'AUTO: ON';
+        showNotification('⚡ AUTO-EQUIP: AKTIF');
+        if (isBodyDetected) triggerAutoEquip();
+      } else {
+        btnAutoEquip.classList.remove('active-cyan');
+        autoEquipLabel.textContent = 'AUTO: OFF';
+        showNotification('AUTO-EQUIP: NONAKTIF');
+      }
+    });
+
+    const btnCamSwitch = document.getElementById('btnCamSwitch');
+    btnCamSwitch.addEventListener('click', () => {
+      playAudio('click');
+      if (isTestPoseMode) {
+        isTestPoseMode = false;
+        document.getElementById('camLabel').textContent = 'FRONT CAM';
+        showNotification('MENGHUBUNGKAN KAMERA DEPAN...');
+        startCamera();
+      } else {
+        activateTestPoseMode();
+      }
+    });
+
+    const btnTestPose = document.getElementById('btnTestPose');
+    btnTestPose.addEventListener('click', () => {
+      playAudio('click');
+      isTestPoseMode = true;
+      testPoseIndex = (testPoseIndex + 1) % TEST_POSES.length;
+      document.getElementById('camLabel').textContent = 'TEST POSE';
+      showNotification(`POSE SIMULASI: ${TEST_POSES[testPoseIndex]}`);
+      if (autoEquipEnabled) triggerAutoEquip();
+    });
+
+    // Drawer bindings
+    const btnArmorMenu = document.getElementById('btnArmorMenu');
+    const armorDrawerBackdrop = document.getElementById('armorDrawerBackdrop');
+    const btnCloseDrawer = document.getElementById('btnCloseDrawer');
+    const btnPrevDrawer = document.getElementById('btnPrevDrawer');
+    const btnNextDrawer = document.getElementById('btnNextDrawer');
+    const drawerArmorName = document.getElementById('drawerArmorName');
+    const drawerArmorCategory = document.getElementById('drawerArmorCategory');
+    const drawerPreviewImg = document.getElementById('drawerPreviewImg');
+    const drawerStatDef = document.getElementById('drawerStatDef');
+    const drawerStatAgi = document.getElementById('drawerStatAgi');
+    const drawerStatPwr = document.getElementById('drawerStatPwr');
+    const btnDrawerEquip = document.getElementById('btnDrawerEquip');
+    const drawerEquipText = document.getElementById('drawerEquipText');
+    const armorBtnSub = document.getElementById('armorBtnSub');
+    const drawerTitleDot = document.getElementById('drawerTitleDot');
+
+    function updateDrawerUI() {
+      const a = ARMOR_LIST[currentArmorIndex];
+      drawerArmorName.textContent = a.name;
+      drawerArmorName.style.color = a.themeColor;
+      drawerArmorCategory.textContent = a.category;
+      drawerArmorCategory.style.color = a.themeColor;
+      drawerPreviewImg.src = a.preview;
+      drawerStatDef.textContent = a.def + '%';
+      drawerStatAgi.textContent = a.agi + '%';
+      drawerStatPwr.textContent = a.pwr + '%';
+      drawerTitleDot.style.background = a.themeColor;
+      armorBtnSub.textContent = a.name;
+      armorBtnSub.style.color = a.themeColor;
+
+      if (a.id === 'cyber_knight') {
+        btnDrawerEquip.classList.remove('dark-knight');
+      } else {
+        btnDrawerEquip.classList.add('dark-knight');
+      }
+      drawerEquipText.textContent = `EQUIP ${a.name}`;
     }
 
-    requestAnimationFrame(renderLoop);
+    function openDrawer() {
+      armorDrawerBackdrop.classList.add('open');
+      btnArmorMenu.classList.add('open');
+      updateDrawerUI();
+      playAudio('click');
+    }
 
-    // Initial setup on start
-    updateDrawerUI();
-    setTimeout(() => {
+    function closeDrawer() {
+      armorDrawerBackdrop.classList.remove('open');
+      btnArmorMenu.classList.remove('open');
+      playAudio('click');
+    }
+
+    btnArmorMenu.addEventListener('click', openDrawer);
+    btnCloseDrawer.addEventListener('click', closeDrawer);
+    armorDrawerBackdrop.addEventListener('click', (e) => {
+      if (e.target === armorDrawerBackdrop) closeDrawer();
+    });
+
+    btnPrevDrawer.addEventListener('click', () => {
+      currentArmorIndex = (currentArmorIndex - 1 + ARMOR_LIST.length) % ARMOR_LIST.length;
+      updateDrawerUI();
+      playAudio('click');
+      if (autoEquipEnabled) triggerAutoEquip();
+    });
+
+    btnNextDrawer.addEventListener('click', () => {
+      currentArmorIndex = (currentArmorIndex + 1) % ARMOR_LIST.length;
+      updateDrawerUI();
+      playAudio('click');
+      if (autoEquipEnabled) triggerAutoEquip();
+    });
+
+    btnDrawerEquip.addEventListener('click', () => {
+      closeDrawer();
       triggerAutoEquip();
-    }, 500);
+    });
+
+    // ==========================================
+    // 14. LIFECYCLE INITIALIZATION
+    // ==========================================
+    window.addEventListener('DOMContentLoaded', () => {
+      updateDrawerUI();
+      initMediaPipePose();
+      startCamera();
+    });
   </script>
 </body>
 </html>

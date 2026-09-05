@@ -89,31 +89,31 @@ class PoseDetectorManager(
             )
         }
 
-        // When front camera is mirrored, anatomical left/right swap visual screen sides
-        // Let's ensure left/right are mapped to screen-left and screen-right for natural overlay:
-        val screenLeftShoulder = if (isFrontCamera) getPoint(PoseLandmark.RIGHT_SHOULDER) else getPoint(PoseLandmark.LEFT_SHOULDER)
-        val screenRightShoulder = if (isFrontCamera) getPoint(PoseLandmark.LEFT_SHOULDER) else getPoint(PoseLandmark.RIGHT_SHOULDER)
+        // When mirrored horizontally (1f - normX), anatomical LEFT_SHOULDER maps directly
+        // to the user's left side on screen (like looking in a mirror).
+        val screenLeftShoulder = getPoint(PoseLandmark.LEFT_SHOULDER)
+        val screenRightShoulder = getPoint(PoseLandmark.RIGHT_SHOULDER)
 
-        val screenLeftElbow = if (isFrontCamera) getPoint(PoseLandmark.RIGHT_ELBOW) else getPoint(PoseLandmark.LEFT_ELBOW)
-        val screenRightElbow = if (isFrontCamera) getPoint(PoseLandmark.LEFT_ELBOW) else getPoint(PoseLandmark.RIGHT_ELBOW)
+        val screenLeftElbow = getPoint(PoseLandmark.LEFT_ELBOW)
+        val screenRightElbow = getPoint(PoseLandmark.RIGHT_ELBOW)
 
-        val screenLeftWrist = if (isFrontCamera) getPoint(PoseLandmark.RIGHT_WRIST) else getPoint(PoseLandmark.LEFT_WRIST)
-        val screenRightWrist = if (isFrontCamera) getPoint(PoseLandmark.LEFT_WRIST) else getPoint(PoseLandmark.RIGHT_WRIST)
+        val screenLeftWrist = getPoint(PoseLandmark.LEFT_WRIST)
+        val screenRightWrist = getPoint(PoseLandmark.RIGHT_WRIST)
 
-        val screenLeftHip = if (isFrontCamera) getPoint(PoseLandmark.RIGHT_HIP) else getPoint(PoseLandmark.LEFT_HIP)
-        val screenRightHip = if (isFrontCamera) getPoint(PoseLandmark.LEFT_HIP) else getPoint(PoseLandmark.RIGHT_HIP)
+        val screenLeftHip = getPoint(PoseLandmark.LEFT_HIP)
+        val screenRightHip = getPoint(PoseLandmark.RIGHT_HIP)
 
-        val screenLeftKnee = if (isFrontCamera) getPoint(PoseLandmark.RIGHT_KNEE) else getPoint(PoseLandmark.LEFT_KNEE)
-        val screenRightKnee = if (isFrontCamera) getPoint(PoseLandmark.LEFT_KNEE) else getPoint(PoseLandmark.RIGHT_KNEE)
+        val screenLeftKnee = getPoint(PoseLandmark.LEFT_KNEE)
+        val screenRightKnee = getPoint(PoseLandmark.RIGHT_KNEE)
 
-        val screenLeftAnkle = if (isFrontCamera) getPoint(PoseLandmark.RIGHT_ANKLE) else getPoint(PoseLandmark.LEFT_ANKLE)
-        val screenRightAnkle = if (isFrontCamera) getPoint(PoseLandmark.LEFT_ANKLE) else getPoint(PoseLandmark.RIGHT_ANKLE)
+        val screenLeftAnkle = getPoint(PoseLandmark.LEFT_ANKLE)
+        val screenRightAnkle = getPoint(PoseLandmark.RIGHT_ANKLE)
 
-        val screenLeftEye = if (isFrontCamera) getPoint(PoseLandmark.RIGHT_EYE) else getPoint(PoseLandmark.LEFT_EYE)
-        val screenRightEye = if (isFrontCamera) getPoint(PoseLandmark.LEFT_EYE) else getPoint(PoseLandmark.RIGHT_EYE)
+        val screenLeftEye = getPoint(PoseLandmark.LEFT_EYE)
+        val screenRightEye = getPoint(PoseLandmark.RIGHT_EYE)
 
-        val screenLeftEar = if (isFrontCamera) getPoint(PoseLandmark.RIGHT_EAR) else getPoint(PoseLandmark.LEFT_EAR)
-        val screenRightEar = if (isFrontCamera) getPoint(PoseLandmark.LEFT_EAR) else getPoint(PoseLandmark.RIGHT_EAR)
+        val screenLeftEar = getPoint(PoseLandmark.LEFT_EAR)
+        val screenRightEar = getPoint(PoseLandmark.RIGHT_EAR)
 
         val avgConfidence = listOf(
             screenLeftShoulder.confidence,
