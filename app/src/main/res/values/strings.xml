@@ -1,0 +1,11 @@
+<resources>
+    <string name="app_name">AR Armor</string>
+    <string name="armor_title">ARMOR</string>
+    <string name="dark_knight">DARK KNIGHT</string>
+    <string name="cyber_knight">CYBER KNIGHT</string>
+    <string name="equip">EQUIP</string>
+    <string name="equipped">EQUIPPED</string>
+    <string name="unequip">UNEQUIP</string>
+    <string name="camera_permission_required">Camera permission is required for AR Body Tracking</string>
+    <string name="grant_permission">GRANT PERMISSION</string>
+</resources>

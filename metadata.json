@@ -1,0 +1,8 @@
+{
+  "name": "AR Armor",
+  "description": "Real-time front camera AR body tracking armor overlay with Dark Knight and Cyber Knight sets.",
+  "requestFramePermissions": [
+    "android.permission.CAMERA"
+  ],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
