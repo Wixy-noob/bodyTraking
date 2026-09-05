@@ -1,24 +1,22 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="id">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>AR Armor - Web Body Tracking</title>
+  <title>AR Body Tracking</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800;900&family=Rajdhani:wght@600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg: #07090e;
-      --panel-bg: rgba(10, 15, 26, 0.75);
-      --panel-border: rgba(0, 229, 255, 0.25);
-      --cyan: #00e5ff;
-      --cyan-glow: rgba(0, 229, 255, 0.5);
-      --gold: #ffb300;
-      --gold-glow: rgba(255, 179, 0, 0.4);
-      --dark-armor: #181b22;
-      --text-main: #f0f4f8;
-      --text-muted: #8a99ad;
+      --bg: #030712;
+      --hud-dark: rgba(9, 13, 22, 0.88);
+      --hud-border: rgba(0, 240, 255, 0.28);
+      --neon-cyan: #00f0ff;
+      --neon-green: #00ff66;
+      --amber: #ffb703;
+      --text: #ffffff;
+      --text-dim: rgba(255, 255, 255, 0.65);
     }
 
     * {
@@ -27,6 +25,7 @@
       padding: 0;
       user-select: none;
       -webkit-user-select: none;
+      -webkit-tap-highlight-color: transparent;
     }
 
     body, html {
@@ -34,20 +33,20 @@
       height: 100%;
       overflow: hidden;
       background-color: var(--bg);
-      font-family: 'Rajdhani', sans-serif;
-      color: var(--text-main);
+      font-family: 'Share Tech Mono', monospace, sans-serif;
+      color: var(--text);
     }
 
     #app-container {
       position: relative;
       width: 100%;
       height: 100%;
+      overflow: hidden;
       display: flex;
       flex-direction: column;
-      overflow: hidden;
     }
 
-    /* Video & Canvas layer */
+    /* Video element for Front Camera */
     #webcam {
       position: absolute;
       top: 0;
@@ -57,8 +56,10 @@
       object-fit: cover;
       transform: scaleX(-1);
       display: none;
+      z-index: 0;
     }
 
+    /* Primary AR Drawing Canvas */
     #arCanvas {
       position: absolute;
       top: 0;
@@ -68,8 +69,8 @@
       z-index: 1;
     }
 
-    /* HUD Layer */
-    .hud-overlay {
+    /* HUD Layer (Edge-to-Edge like Compose Scaffold) */
+    .hud-layer {
       position: absolute;
       top: 0;
       left: 0;
@@ -80,333 +81,489 @@
       display: flex;
       flex-direction: column;
       justify-content: space-between;
-      padding: 16px;
+      padding: 18px 16px;
     }
 
     .interactive {
       pointer-events: auto;
     }
 
-    /* Cyberpunk Corner Brackets */
-    .corner-bracket {
-      position: absolute;
-      width: 24px;
-      height: 24px;
-      border-color: var(--cyan);
-      opacity: 0.6;
-    }
-    .top-left { top: 12px; left: 12px; border-top: 2px solid; border-left: 2px solid; }
-    .top-right { top: 12px; right: 12px; border-top: 2px solid; border-right: 2px solid; }
-    .bottom-left { bottom: 12px; left: 12px; border-bottom: 2px solid; border-left: 2px solid; }
-    .bottom-right { bottom: 12px; right: 12px; border-bottom: 2px solid; border-right: 2px solid; }
-
-    /* Top Bar */
+    /* TOP BAR: TrackingStatusHud on Left, ArmorHudButton on Right */
     .top-bar {
       display: flex;
       justify-content: space-between;
-      align-items: center;
+      align-items: flex-start;
       width: 100%;
     }
 
-    .brand {
+    /* Top Left: TrackingStatusHud */
+    .tracking-status-hud {
       display: flex;
       align-items: center;
       gap: 10px;
-      background: var(--panel-bg);
+      background: var(--hud-dark);
+      border: 1px solid var(--hud-border);
+      border-radius: 10px;
+      padding: 8px 14px;
+      box-shadow: 0 4px 18px rgba(0, 0, 0, 0.6);
       backdrop-filter: blur(12px);
-      border: 1px solid var(--panel-border);
-      border-radius: 8px;
-      padding: 6px 14px;
-      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
     }
 
-    .brand h1 {
-      font-family: 'Orbitron', monospace;
-      font-size: 15px;
+    .status-indicator-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--neon-green);
+      box-shadow: 0 0 10px var(--neon-green);
+      animation: radar-pulse 1.4s infinite ease-in-out;
+    }
+
+    .status-indicator-dot.scanning {
+      background: var(--amber);
+      box-shadow: 0 0 10px var(--amber);
+    }
+
+    @keyframes radar-pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.35; transform: scale(0.75); }
+    }
+
+    .status-text-box {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .status-title {
+      font-size: 11px;
       font-weight: 700;
+      letter-spacing: 1px;
+      color: var(--neon-green);
+    }
+
+    .status-title.scanning {
+      color: var(--amber);
+    }
+
+    .status-subtitle {
+      font-size: 9px;
+      color: var(--text-dim);
+      margin-top: 1px;
+    }
+
+    /* Top Right: ArmorHudButton */
+    .armor-hud-btn {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--hud-dark);
+      border: 1.5px solid var(--neon-cyan);
+      border-radius: 12px;
+      padding: 8px 16px;
+      cursor: pointer;
+      box-shadow: 0 0 14px rgba(0, 240, 255, 0.25);
+      backdrop-filter: blur(12px);
+      transition: transform 0.15s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+    }
+
+    .armor-hud-btn:active {
+      transform: scale(0.96);
+    }
+
+    .armor-hud-btn.open {
+      border-color: #ffffff;
+      box-shadow: 0 0 20px rgba(0, 240, 255, 0.5);
+    }
+
+    .armor-btn-text {
+      display: flex;
+      flex-direction: column;
+      text-align: left;
+    }
+
+    .armor-btn-label {
+      font-size: 13px;
+      font-weight: 800;
       letter-spacing: 2px;
       color: #fff;
     }
 
-    .status-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      font-size: 11px;
+    .armor-btn-sub {
+      font-size: 9px;
       font-weight: 600;
-      letter-spacing: 1px;
-      padding: 3px 8px;
-      border-radius: 4px;
-      background: rgba(0, 229, 255, 0.15);
-      color: var(--cyan);
-      border: 1px solid rgba(0, 229, 255, 0.4);
+      color: var(--neon-cyan);
     }
 
-    .status-dot {
-      width: 6px;
-      height: 6px;
-      border-radius: 50%;
-      background: var(--cyan);
-      box-shadow: 0 0 8px var(--cyan);
-      animation: pulse 1.6s infinite ease-in-out;
-    }
-
-    @keyframes pulse {
-      0%, 100% { opacity: 1; transform: scale(1); }
-      50% { opacity: 0.4; transform: scale(0.8); }
-    }
-
-    .top-actions {
+    /* NOTIFICATION BANNER (Holographic pill dropped from top) */
+    .hud-notification-banner {
+      position: absolute;
+      top: 72px;
+      left: 50%;
+      transform: translateX(-50%) translateY(-20px);
+      background: rgba(9, 13, 22, 0.94);
+      border: 1px solid var(--neon-cyan);
+      border-radius: 12px;
+      padding: 8px 20px;
       display: flex;
+      align-items: center;
       gap: 8px;
+      box-shadow: 0 4px 24px rgba(0, 240, 255, 0.35);
+      opacity: 0;
+      pointer-events: none;
+      transition: all 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+      z-index: 25;
     }
 
-    .icon-btn {
-      background: var(--panel-bg);
-      backdrop-filter: blur(12px);
-      border: 1px solid var(--panel-border);
-      color: var(--cyan);
-      border-radius: 8px;
-      width: 40px;
-      height: 40px;
+    .hud-notification-banner.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    .hud-notification-banner span {
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      color: #ffffff;
+    }
+
+    /* CENTER: BodyTargetingReticle (When waiting for body) */
+    .center-reticle-box {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(9, 13, 22, 0.75);
+      border: 1px solid rgba(0, 240, 255, 0.5);
+      border-radius: 16px;
+      padding: 16px 24px;
+      text-align: center;
+      box-shadow: 0 0 30px rgba(0, 240, 255, 0.2);
+      backdrop-filter: blur(10px);
+      transition: opacity 0.3s ease;
+      z-index: 8;
+      max-width: 90%;
+    }
+
+    .center-reticle-box.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .reticle-header {
       display: flex;
       align-items: center;
       justify-content: center;
+      gap: 8px;
+      margin-bottom: 4px;
+    }
+
+    .reticle-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--amber);
+      box-shadow: 0 0 10px var(--amber);
+      animation: radar-pulse 1.2s infinite ease-in-out;
+    }
+
+    .reticle-title {
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 1px;
+      color: var(--amber);
+    }
+
+    .reticle-sub {
+      font-size: 10px;
+      color: var(--text-dim);
+    }
+
+    /* BOTTOM CONTROLS BAR: Floating Glass Pill */
+    .bottom-bar-container {
+      display: flex;
+      justify-content: center;
+      width: 100%;
+      margin-bottom: 8px;
+      z-index: 15;
+    }
+
+    .hud-controls-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--hud-dark);
+      border: 1px solid var(--hud-border);
+      border-radius: 24px;
+      padding: 6px 12px;
+      box-shadow: 0 6px 24px rgba(0, 0, 0, 0.7);
+      backdrop-filter: blur(16px);
+    }
+
+    .hud-chip-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      background: transparent;
+      border: 1px solid transparent;
+      border-radius: 16px;
+      padding: 6px 11px;
+      color: #fff;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 10.5px;
+      font-weight: 700;
       cursor: pointer;
       transition: all 0.2s ease;
     }
 
-    .icon-btn:hover, .icon-btn:active {
-      background: rgba(0, 229, 255, 0.2);
-      border-color: var(--cyan);
-      box-shadow: 0 0 14px var(--cyan-glow);
-      transform: translateY(-1px);
+    .hud-chip-btn:active {
+      transform: scale(0.95);
     }
 
-    .icon-btn svg {
-      width: 20px;
-      height: 20px;
+    .hud-chip-btn.active-cyan {
+      background: rgba(0, 240, 255, 0.2);
+      border-color: rgba(0, 240, 255, 0.7);
+      color: var(--neon-cyan);
+    }
+
+    .hud-chip-btn.active-green {
+      background: rgba(0, 255, 102, 0.2);
+      border-color: rgba(0, 255, 102, 0.6);
+      color: var(--neon-green);
+    }
+
+    .hud-chip-btn.subtle {
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--neon-cyan);
+    }
+
+    .hud-chip-btn svg {
+      width: 14px;
+      height: 14px;
       fill: currentColor;
     }
 
-    /* Armor Selector Drawer / Bottom Card */
-    .bottom-container {
-      width: 100%;
-      max-width: 480px;
-      margin: 0 auto;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-    }
-
-    .armor-card {
-      background: var(--panel-bg);
-      backdrop-filter: blur(16px);
-      border: 1px solid var(--panel-border);
-      border-radius: 12px;
-      padding: 14px 18px;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6), inset 0 0 16px rgba(0, 229, 255, 0.05);
-      transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
-    }
-
-    .armor-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 10px;
-    }
-
-    .nav-arrow {
-      background: rgba(255, 255, 255, 0.06);
-      border: 1px solid rgba(255, 255, 255, 0.15);
-      color: var(--text-main);
-      width: 32px;
-      height: 32px;
-      border-radius: 6px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-      font-size: 14px;
-      font-weight: bold;
-      transition: all 0.2s ease;
-    }
-
-    .nav-arrow:hover {
-      background: rgba(0, 229, 255, 0.25);
-      border-color: var(--cyan);
-      color: var(--cyan);
-    }
-
-    .armor-title-box {
-      text-align: center;
-    }
-
-    .armor-title {
-      font-family: 'Orbitron', monospace;
-      font-size: 17px;
-      font-weight: 700;
-      letter-spacing: 2px;
-    }
-
-    .armor-subtitle {
-      font-size: 11px;
-      color: var(--text-muted);
-      letter-spacing: 1px;
-      text-transform: uppercase;
-    }
-
-    .stats-row {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 8px;
-      margin-bottom: 12px;
-    }
-
-    .stat-item {
-      background: rgba(255, 255, 255, 0.04);
-      border-radius: 6px;
-      padding: 6px 8px;
-      text-align: center;
-      border: 1px solid rgba(255, 255, 255, 0.06);
-    }
-
-    .stat-label {
-      font-size: 10px;
-      color: var(--text-muted);
-      letter-spacing: 1px;
-    }
-
-    .stat-bar-container {
-      width: 100%;
-      height: 4px;
-      background: rgba(255, 255, 255, 0.1);
-      border-radius: 2px;
-      margin-top: 4px;
-      overflow: hidden;
-    }
-
-    .stat-bar {
-      height: 100%;
-      border-radius: 2px;
-      transition: width 0.4s ease;
-    }
-
-    .btn-equip {
-      width: 100%;
-      padding: 12px 16px;
-      border: none;
-      border-radius: 8px;
-      background: linear-gradient(90deg, #00b4d8, #00e5ff);
-      color: #07090e;
-      font-family: 'Orbitron', monospace;
-      font-weight: 900;
-      font-size: 13px;
-      letter-spacing: 2px;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 10px;
-      box-shadow: 0 4px 20px var(--cyan-glow);
-      transition: all 0.2s ease;
-    }
-
-    .btn-equip:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 6px 26px var(--cyan-glow);
-      filter: brightness(1.1);
-    }
-
-    .btn-equip.dark-theme-equip {
-      background: linear-gradient(90deg, #374151, #9ca3af);
-      color: #fff;
-      box-shadow: 0 4px 20px rgba(156, 163, 175, 0.4);
-    }
-
-    .quick-toolbar {
-      display: flex;
-      justify-content: center;
-      gap: 8px;
-    }
-
-    .pill-btn {
-      background: var(--panel-bg);
-      backdrop-filter: blur(10px);
-      border: 1px solid var(--panel-border);
-      color: var(--text-main);
-      padding: 6px 14px;
-      border-radius: 20px;
-      font-size: 11px;
-      font-weight: 600;
-      letter-spacing: 1px;
-      cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      transition: all 0.2s ease;
-    }
-
-    .pill-btn:hover {
-      border-color: var(--cyan);
-      color: var(--cyan);
-    }
-
-    /* Modal / Info Dialog */
-    .modal-backdrop {
+    /* ARMOR SELECTOR DRAWER (Identical to Android APK ArmorSelectorPanel) */
+    .armor-drawer-backdrop {
       position: absolute;
       top: 0;
       left: 0;
       width: 100%;
       height: 100%;
-      background: rgba(5, 7, 12, 0.85);
+      background: rgba(0, 0, 0, 0.6);
       backdrop-filter: blur(8px);
-      z-index: 100;
-      display: none;
+      z-index: 50;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s ease;
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+    }
+
+    .armor-drawer-backdrop.open {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .armor-drawer-card {
+      width: 100%;
+      max-width: 480px;
+      background: linear-gradient(180deg, #090e18 0%, #020617 100%);
+      border: 1.5px solid rgba(0, 240, 255, 0.4);
+      border-radius: 24px 24px 0 0;
+      padding: 20px 20px 28px 20px;
+      box-shadow: 0 -8px 36px rgba(0, 0, 0, 0.8), inset 0 0 20px rgba(0, 240, 255, 0.06);
+      transform: translateY(100%);
+      transition: transform 0.32s cubic-bezier(0.18, 0.9, 0.28, 1);
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .armor-drawer-backdrop.open .armor-drawer-card {
+      transform: translateY(0);
+    }
+
+    /* Drawer Header */
+    .drawer-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      width: 100%;
+    }
+
+    .drawer-title-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .drawer-title-dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: var(--neon-cyan);
+    }
+
+    .drawer-title {
+      font-size: 16px;
+      font-weight: 900;
+      letter-spacing: 3px;
+      color: #fff;
+    }
+
+    .drawer-close-btn {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: rgba(255, 255, 255, 0.85);
+      border-radius: 50%;
+      width: 32px;
+      height: 32px;
+      display: flex;
       align-items: center;
       justify-content: center;
-      padding: 20px;
+      cursor: pointer;
     }
 
-    .modal-content {
-      background: #0d121f;
-      border: 1px solid var(--cyan);
-      border-radius: 12px;
-      max-width: 480px;
-      width: 100%;
-      padding: 24px;
-      box-shadow: 0 0 30px rgba(0, 229, 255, 0.3);
-      position: relative;
+    /* Carousel Nav */
+    .drawer-carousel {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 14px;
+      padding: 6px 10px;
     }
 
-    .modal-title {
-      font-family: 'Orbitron', monospace;
+    .drawer-arrow-btn {
+      background: transparent;
+      border: none;
+      color: var(--neon-cyan);
       font-size: 18px;
-      color: var(--cyan);
-      margin-bottom: 12px;
+      font-weight: bold;
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .drawer-armor-info {
+      text-align: center;
+    }
+
+    .drawer-armor-name {
+      font-size: 17px;
+      font-weight: 800;
+      letter-spacing: 2px;
+      color: #fff;
+    }
+
+    .drawer-armor-category {
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--neon-cyan);
       letter-spacing: 1px;
     }
 
-    .modal-body {
-      font-size: 13px;
-      line-height: 1.6;
-      color: #cbd5e1;
-      margin-bottom: 20px;
+    /* Preview Card */
+    .drawer-preview-card {
+      position: relative;
+      width: 100%;
+      height: 200px;
+      border-radius: 16px;
+      overflow: hidden;
+      border: 1px solid rgba(0, 240, 255, 0.35);
+      background: #0d1322;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
     }
 
-    .code-box {
-      background: #04060a;
+    .drawer-preview-card img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .drawer-preview-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(180deg, transparent 40%, rgba(2, 6, 23, 0.85) 75%, rgba(2, 6, 23, 0.98) 100%);
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      padding: 12px 14px;
+    }
+
+    /* Stats inside preview */
+    .drawer-stats-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-top: 6px;
+    }
+
+    .stat-box {
+      background: rgba(9, 13, 22, 0.6);
       border: 1px solid rgba(255, 255, 255, 0.1);
-      padding: 10px;
       border-radius: 6px;
-      font-family: monospace;
-      font-size: 12px;
-      color: #38bdf8;
-      margin: 10px 0;
-      word-break: break-all;
+      padding: 4px 6px;
+      text-align: center;
     }
 
-    /* Scan animation overlay element */
+    .stat-label {
+      font-size: 8.5px;
+      color: var(--text-dim);
+    }
+
+    .stat-val {
+      font-size: 12px;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    /* Action Button (EQUIP / UNEQUIP) */
+    .drawer-equip-btn {
+      width: 100%;
+      background: linear-gradient(90deg, #00b4d8 0%, #00f0ff 100%);
+      color: #030712;
+      border: none;
+      border-radius: 12px;
+      padding: 12px;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 14px;
+      font-weight: 900;
+      letter-spacing: 2px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      box-shadow: 0 4px 20px rgba(0, 240, 255, 0.4);
+      transition: transform 0.15s ease, box-shadow 0.2s ease;
+    }
+
+    .drawer-equip-btn:active {
+      transform: scale(0.98);
+    }
+
+    .drawer-equip-btn.dark-knight {
+      background: linear-gradient(90deg, #475569 0%, #cbd5e1 100%);
+      box-shadow: 0 4px 20px rgba(203, 213, 225, 0.3);
+    }
+
+    .drawer-equip-btn.unequip {
+      background: rgba(255, 255, 255, 0.1);
+      color: #ef4444;
+      border: 1px solid rgba(239, 68, 68, 0.4);
+      box-shadow: none;
+    }
+
+    /* Laser scanline animation overlay */
     #scan-overlay {
       position: absolute;
       top: 0;
@@ -414,255 +571,242 @@
       width: 100%;
       height: 100%;
       pointer-events: none;
-      z-index: 5;
+      z-index: 6;
       display: none;
     }
 
-    .scan-line {
+    .laser-line {
       position: absolute;
-      left: 0;
       width: 100%;
-      height: 4px;
-      background: var(--cyan);
-      box-shadow: 0 0 20px 6px var(--cyan);
-      opacity: 0.9;
+      height: 3px;
+      background: var(--neon-cyan);
+      box-shadow: 0 0 16px var(--neon-cyan), 0 0 32px var(--neon-cyan);
     }
   </style>
 </head>
 <body>
   <div id="app-container">
-    <!-- Video capture element for camera stream -->
-    <video id="webcam" playsinline autoplay muted></video>
+    <!-- Webcam video element -->
+    <video id="webcam" autoplay playsinline muted></video>
 
-    <!-- Main AR Canvas -->
+    <!-- Vector AR Canvas -->
     <canvas id="arCanvas"></canvas>
 
-    <!-- Scanning line overlay for equip effect -->
+    <!-- Laser Scanline VFX overlay -->
     <div id="scan-overlay">
-      <div class="scan-line" id="scanLine"></div>
+      <div class="laser-line" id="laserLine"></div>
     </div>
 
-    <!-- Sci-Fi HUD Overlay -->
-    <div class="hud-overlay">
-      <div class="corner-bracket top-left"></div>
-      <div class="corner-bracket top-right"></div>
-      <div class="corner-bracket bottom-left"></div>
-      <div class="corner-bracket bottom-right"></div>
+    <!-- Center Reticle (when searching for body) -->
+    <div class="center-reticle-box" id="centerReticle">
+      <div class="reticle-header">
+        <div class="reticle-dot"></div>
+        <div class="reticle-title">DETEKSI TUBUH REAL-TIME</div>
+      </div>
+      <div class="reticle-sub" id="reticleSub">Posisikan tubuh di depan kamera • Auto-Equip aktif</div>
+    </div>
 
-      <!-- Top Navigation Bar -->
+    <!-- Top Center Notification Banner -->
+    <div class="hud-notification-banner" id="hudNotification">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="#00f0ff" id="notifIcon"><path d="M7 2v11h3v9l7-12h-4l4-8z"/></svg>
+      <span id="notifText">⚡ DETEKSI TUBUH: AUTO-EQUIP DARK KNIGHT</span>
+    </div>
+
+    <!-- Edge-to-Edge HUD Layer -->
+    <div class="hud-layer">
+      <!-- TOP BAR -->
       <div class="top-bar">
-        <div class="brand interactive">
-          <h1>AR ARMOR</h1>
-          <div class="status-badge" id="trackingStatus">
-            <span class="status-dot"></span>
-            <span id="statusText">SIMULATOR ACTIVE</span>
+        <!-- Status Badge -->
+        <div class="tracking-status-hud interactive">
+          <div class="status-indicator-dot" id="statusDot"></div>
+          <div class="status-text-box">
+            <div class="status-title" id="statusTitle">BODY LOCK: ACTIVE</div>
+            <div class="status-subtitle" id="statusSub">Confidence: 96%</div>
           </div>
         </div>
 
-        <div class="top-actions interactive">
-          <!-- Toggle Camera / Simulator -->
-          <button class="icon-btn" id="btnToggleCam" title="Toggle Webcam / Pose Simulator">
+        <!-- Armor Menu Button -->
+        <div class="armor-hud-btn interactive" id="btnArmorMenu">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="#00f0ff" id="armorBtnIcon"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/></svg>
+          <div class="armor-btn-text">
+            <span class="armor-btn-label">ARMOR</span>
+            <span class="armor-btn-sub" id="armorBtnSub">DARK KNIGHT</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- BOTTOM TOOLBAR (Pill Bar) -->
+      <div class="bottom-bar-container">
+        <div class="hud-controls-bar interactive">
+          <!-- Camera / Demo Mode Toggle -->
+          <button class="hud-chip-btn" id="btnCamToggle">
             <svg viewBox="0 0 24 24"><path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/></svg>
+            <span id="camToggleLabel">FRONT CAM</span>
           </button>
-          <!-- Take Snapshot -->
-          <button class="icon-btn" id="btnSnapshot" title="Capture AR Photo">
-            <svg viewBox="0 0 24 24"><path d="M9 2L7.17 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2h-3.17L15 2H9zm3 15c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5z"/></svg>
-          </button>
-          <!-- Info / Web Guide -->
-          <button class="icon-btn" id="btnInfo" title="Website & Deployment Info">
-            <svg viewBox="0 0 24 24"><path d="M11 17h2v-6h-2v6zm1-15C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zM11 9h2V7h-2v2z"/></svg>
-          </button>
-        </div>
-      </div>
 
-      <!-- Center Telemetry Reticle -->
-      <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); opacity: 0.25; pointer-events: none;">
-        <svg width="120" height="120" viewBox="0 0 120 120">
-          <circle cx="60" cy="60" r="50" fill="none" stroke="#00e5ff" stroke-width="1" stroke-dasharray="8 6"/>
-          <circle cx="60" cy="60" r="30" fill="none" stroke="#00e5ff" stroke-width="1"/>
-          <line x1="10" y1="60" x2="35" y2="60" stroke="#00e5ff" stroke-width="1"/>
-          <line x1="85" y1="60" x2="110" y2="60" stroke="#00e5ff" stroke-width="1"/>
-          <line x1="60" y1="10" x2="60" y2="35" stroke="#00e5ff" stroke-width="1"/>
-          <line x1="60" y1="85" x2="60" y2="110" stroke="#00e5ff" stroke-width="1"/>
-        </svg>
-      </div>
-
-      <!-- Bottom Controls -->
-      <div class="bottom-container">
-        <!-- Quick toolbar -->
-        <div class="quick-toolbar interactive">
-          <button class="pill-btn" id="btnAutoEquip" style="border-color: rgba(0, 229, 255, 0.6); color: #00e5ff;">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M11 21h-1l1-7H7.5c-.88 0-.33-.75-.31-.78C8.48 10.94 10.42 7.54 13.01 3h1l-1 7h3.51c.4 0 .62.19.4.66C12.97 17.55 11 21 11 21z"/></svg>
-            <span id="autoEquipLabel">⚡ AUTO: ON</span>
+          <!-- Auto-Equip Toggle -->
+          <button class="hud-chip-btn active-cyan" id="btnAutoEquip">
+            <svg viewBox="0 0 24 24"><path d="M11 21h-1l1-7H7.5c-.88 0-.33-.75-.31-.78C8.48 10.94 10.42 7.54 13.01 3h1l-1 7h3.51c.4 0 .62.19.4.66C12.97 17.55 11 21 11 21z"/></svg>
+            <span id="autoEquipLabel">AUTO: ON</span>
           </button>
-          <button class="pill-btn" id="btnPoseMode">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2c1.1 0 2 .9 2 2s-.9 2-2 2-2-.9-2-2 .9-2 2-2zm9 7h-6v13h-2v-6h-2v6H9V9H3V7h18v2z"/></svg>
-            <span id="poseModeLabel">STANCE: IDLE</span>
+
+          <!-- Next Pose (Demo Stance Switcher) -->
+          <button class="hud-chip-btn subtle" id="btnNextPose">
+            <span>NEXT ▶</span>
           </button>
-          <button class="pill-btn" id="btnAudioToggle">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/></svg>
-            <span id="audioLabel">FX SOUND: ON</span>
-          </button>
-        </div>
 
-        <!-- Armor Selector Card -->
-        <div class="armor-card interactive" id="armorCard">
-          <div class="armor-header">
-            <button class="nav-arrow" id="btnPrevArmor">◀</button>
-            <div class="armor-title-box">
-              <div class="armor-title" id="armorName" style="color: #fff;">DARK KNIGHT</div>
-              <div class="armor-subtitle" id="armorSubtitle">Gothic Steel & Midnight Cowl</div>
-            </div>
-            <button class="nav-arrow" id="btnNextArmor">▶</button>
-          </div>
-
-          <div class="stats-row">
-            <div class="stat-item">
-              <div class="stat-label">DEFENSE</div>
-              <div style="font-size: 13px; font-weight: 700;" id="statDef">95%</div>
-              <div class="stat-bar-container">
-                <div class="stat-bar" id="barDef" style="width: 95%; background: #9ca3af;"></div>
-              </div>
-            </div>
-            <div class="stat-item">
-              <div class="stat-label">AGILITY</div>
-              <div style="font-size: 13px; font-weight: 700;" id="statAgi">62%</div>
-              <div class="stat-bar-container">
-                <div class="stat-bar" id="barAgi" style="width: 62%; background: #60a5fa;"></div>
-              </div>
-            </div>
-            <div class="stat-item">
-              <div class="stat-label">POWER</div>
-              <div style="font-size: 13px; font-weight: 700;" id="statPwr">92%</div>
-              <div class="stat-bar-container">
-                <div class="stat-bar" id="barPwr" style="width: 92%; background: #f59e0b;"></div>
-              </div>
-            </div>
-          </div>
-
-          <button class="btn-equip dark-theme-equip" id="btnEquip">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/></svg>
-            <span id="equipText">EQUIP DARK KNIGHT</span>
+          <!-- Bones / Skeleton Toggle -->
+          <button class="hud-chip-btn" id="btnBones">
+            <svg viewBox="0 0 24 24"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
+            <span>BONES</span>
           </button>
         </div>
       </div>
     </div>
 
-    <!-- Info / Deployment Modal -->
-    <div class="modal-backdrop interactive" id="infoModal">
-      <div class="modal-content">
-        <div class="modal-title">AR BODY ARMOR (WEB SUITE)</div>
-        <div class="modal-body">
-          <p>This application is running the complete <strong>Web AR Body Tracking Engine</strong>:</p>
-          <ul style="margin: 10px 0 10px 20px;">
-            <li>Real-time front camera webcam tracking via <code>getUserMedia</code></li>
-            <li>Interactive virtual pose simulation (Idle, Sword Stance, Wave, Walk)</li>
-            <li>Custom vector renderers for <strong>Dark Knight</strong> & <strong>Cyber Knight</strong></li>
-            <li>Feet-to-head laser scanline equip animation with procedural Web Audio FX</li>
-          </ul>
-          <p><strong>To Deploy or Host this Website:</strong></p>
-          <div class="code-box">npx serve public<br/># or drag & drop to Vercel, Netlify, or GitHub Pages</div>
-          <p>You can also use this app directly inside any modern browser on PC, Mac, Android, and iOS.</p>
+    <!-- ARMOR SELECTOR DRAWER -->
+    <div class="armor-drawer-backdrop" id="armorDrawerBackdrop">
+      <div class="armor-drawer-card">
+        <!-- Header -->
+        <div class="drawer-header">
+          <div class="drawer-title-row">
+            <div class="drawer-title-dot" id="drawerTitleDot"></div>
+            <div class="drawer-title">[ ARMOR ]</div>
+          </div>
+          <button class="drawer-close-btn" id="btnCloseDrawer">✕</button>
         </div>
-        <button class="btn-equip" id="btnCloseModal" style="width: 100%;">CLOSE HUD</button>
+
+        <!-- Carousel Bar -->
+        <div class="drawer-carousel">
+          <button class="drawer-arrow-btn" id="btnPrevDrawer">◀</button>
+          <div class="drawer-armor-info">
+            <div class="drawer-armor-name" id="drawerArmorName">DARK KNIGHT</div>
+            <div class="drawer-armor-category" id="drawerArmorCategory">GOTHIC MELEE</div>
+          </div>
+          <button class="drawer-arrow-btn" id="btnNextDrawer">▶</button>
+        </div>
+
+        <!-- Preview Card -->
+        <div class="drawer-preview-card">
+          <img id="drawerPreviewImg" src="assets/armor_dark_knight_preview.jpg" alt="Armor Preview" />
+          <div class="drawer-preview-overlay">
+            <div class="drawer-stats-row">
+              <div class="stat-box">
+                <div class="stat-label">DEFENSE</div>
+                <div class="stat-val" id="drawerStatDef">95%</div>
+              </div>
+              <div class="stat-box">
+                <div class="stat-label">AGILITY</div>
+                <div class="stat-val" id="drawerStatAgi">62%</div>
+              </div>
+              <div class="stat-box">
+                <div class="stat-label">POWER</div>
+                <div class="stat-val" id="drawerStatPwr">92%</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Equip / Unequip Button -->
+        <button class="drawer-equip-btn dark-knight" id="btnDrawerEquip">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/></svg>
+          <span id="drawerEquipText">EQUIP DARK KNIGHT</span>
+        </button>
       </div>
     </div>
   </div>
 
   <script>
     // ==========================================
-    // DATA & STATE
+    // ARMOR DEFINITIONS
     // ==========================================
-    const armors = [
+    const ARMOR_LIST = [
       {
         id: 'dark_knight',
         name: 'DARK KNIGHT',
-        subtitle: 'Gothic Steel & Midnight Cowl',
-        themeColor: '#9ca3af',
-        accentColor: '#374151',
+        category: 'GOTHIC MELEE',
+        preview: 'assets/armor_dark_knight_preview.jpg',
+        themeColor: '#cbd5e1',
+        accentColor: '#475569',
         glowColor: 'rgba(255, 255, 255, 0.25)',
         def: 95,
         agi: 62,
-        pwr: 92,
-        buttonClass: 'dark-theme-equip'
+        pwr: 92
       },
       {
         id: 'cyber_knight',
         name: 'CYBER KNIGHT',
-        subtitle: 'Ceramic Exosuit & Cyan Visor',
-        themeColor: '#00e5ff',
+        category: 'HIGH-TECH ASSAULT',
+        preview: 'assets/armor_cyber_knight_preview.jpg',
+        themeColor: '#00f0ff',
         accentColor: '#00b4d8',
-        glowColor: 'rgba(0, 229, 255, 0.6)',
+        glowColor: 'rgba(0, 240, 255, 0.6)',
         def: 86,
         agi: 96,
-        pwr: 89,
-        buttonClass: ''
+        pwr: 89
       }
     ];
 
+    // App States
     let currentArmorIndex = 0;
-    let isEquipping = false;
-    let scanProgress = 1.0; // 0 = feet, 1 = head
+    let isEquipped = true;
+    let isEquipScanning = false;
+    let autoEquipEnabled = true;
+    let showSkeleton = false;
+    let isDemoMode = false;
+    let isCameraActive = false;
+    let isDrawerOpen = false;
+
+    let scanProgress = 1.0;
     let scanStartTime = 0;
-    const SCAN_DURATION = 1800; // ms
+    const SCAN_DURATION = 1600;
 
-    let cameraActive = false;
-    let soundEnabled = true;
     let poseModeIndex = 0;
-    const poseModes = ['IDLE', 'COMBAT', 'WAVE', 'WALK'];
+    const POSE_MODES = ['IDLE', 'COMBAT', 'WAVE', 'WALK'];
 
-    // Audio Context for Procedural Sci-Fi FX
+    // Procedural Audio Synthesizer (Zero external mp3 dependencies)
     let audioCtx = null;
-
-    function playSound(type) {
-      if (!soundEnabled) return;
+    function playAudio(type) {
       try {
-        if (!audioCtx) {
-          audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        }
-        if (audioCtx.state === 'suspended') {
-          audioCtx.resume();
-        }
-
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
         const now = audioCtx.currentTime;
+
         if (type === 'equip') {
-          // Futuristic laser charge sweep
           const osc = audioCtx.createOscillator();
           const gain = audioCtx.createGain();
           osc.type = 'sawtooth';
           osc.frequency.setValueAtTime(140, now);
           osc.frequency.exponentialRampToValueAtTime(880, now + 1.2);
-
           gain.gain.setValueAtTime(0.01, now);
           gain.gain.linearRampToValueAtTime(0.2, now + 0.3);
-          gain.gain.exponentialRampToValueAtTime(0.001, now + 1.6);
-
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 1.5);
           osc.connect(gain);
           gain.connect(audioCtx.destination);
           osc.start(now);
-          osc.stop(now + 1.6);
+          osc.stop(now + 1.5);
 
-          // Clank lock sound at the end
           setTimeout(() => {
+            if (!audioCtx) return;
             const clank = audioCtx.createOscillator();
             const clankGain = audioCtx.createGain();
             clank.type = 'triangle';
             clank.frequency.setValueAtTime(320, audioCtx.currentTime);
-            clank.frequency.exponentialRampToValueAtTime(80, audioCtx.currentTime + 0.3);
+            clank.frequency.exponentialRampToValueAtTime(70, audioCtx.currentTime + 0.3);
             clankGain.gain.setValueAtTime(0.3, audioCtx.currentTime);
             clankGain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
             clank.connect(clankGain);
             clankGain.connect(audioCtx.destination);
             clank.start();
             clank.stop(audioCtx.currentTime + 0.3);
-          }, 1400);
+          }, 1200);
         } else if (type === 'click') {
           const osc = audioCtx.createOscillator();
           const gain = audioCtx.createGain();
           osc.type = 'sine';
           osc.frequency.setValueAtTime(580, now);
-          osc.frequency.exponentialRampToValueAtTime(740, now + 0.08);
-          gain.gain.setValueAtTime(0.12, now);
+          osc.frequency.exponentialRampToValueAtTime(760, now + 0.08);
+          gain.gain.setValueAtTime(0.1, now);
           gain.gain.linearRampToValueAtTime(0.01, now + 0.08);
           osc.connect(gain);
           gain.connect(audioCtx.destination);
@@ -670,16 +814,256 @@
           osc.stop(now + 0.08);
         }
       } catch (e) {
-        console.warn('Audio FX error:', e);
+        // audio muted or unsupported
       }
     }
 
     // ==========================================
-    // CANVAS & RENDERING ENGINE
+    // NOTIFICATION BANNER CONTROLLER
+    // ==========================================
+    const hudNotification = document.getElementById('hudNotification');
+    const notifText = document.getElementById('notifText');
+    let notifTimer = null;
+
+    function showNotification(text) {
+      if (notifTimer) clearTimeout(notifTimer);
+      notifText.textContent = text;
+      hudNotification.classList.add('show');
+      notifTimer = setTimeout(() => {
+        hudNotification.classList.remove('show');
+      }, 2600);
+    }
+
+    // ==========================================
+    // CAMERA / WEBCAM INITIALIZATION ("kamera jangan")
+    // ==========================================
+    const video = document.getElementById('webcam');
+    const camToggleLabel = document.getElementById('camToggleLabel');
+    const btnCamToggle = document.getElementById('btnCamToggle');
+    const statusTitle = document.getElementById('statusTitle');
+    const statusSub = document.getElementById('statusSub');
+    const statusDot = document.getElementById('statusDot');
+    const centerReticle = document.getElementById('centerReticle');
+
+    async function startWebcam() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: 'user',
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+          }
+        });
+        video.srcObject = stream;
+        await video.play();
+        isCameraActive = true;
+        isDemoMode = false;
+        video.style.display = 'block';
+        camToggleLabel.textContent = 'FRONT CAM';
+        btnCamToggle.classList.add('active-cyan');
+        statusTitle.textContent = 'BODY LOCK: ACTIVE';
+        statusTitle.classList.remove('scanning');
+        statusDot.classList.remove('scanning');
+        statusSub.textContent = 'Live Webcam AR Active';
+        centerReticle.classList.add('hidden');
+        if (autoEquipEnabled) {
+          triggerAutoEquip();
+        }
+      } catch (err) {
+        console.warn('Camera access fallback to Virtual Pose:', err);
+        fallbackToDemoMode();
+      }
+    }
+
+    function stopWebcam() {
+      if (video.srcObject) {
+        video.srcObject.getTracks().forEach(t => t.stop());
+        video.srcObject = null;
+      }
+      isCameraActive = false;
+      video.style.display = 'none';
+      btnCamToggle.classList.remove('active-cyan');
+    }
+
+    function fallbackToDemoMode() {
+      stopWebcam();
+      isDemoMode = true;
+      camToggleLabel.textContent = 'DEMO: ' + POSE_MODES[poseModeIndex];
+      statusTitle.textContent = 'TEST POSE SIMULATOR';
+      statusTitle.classList.remove('scanning');
+      statusDot.classList.remove('scanning');
+      statusSub.textContent = 'Front Camera Available';
+      centerReticle.classList.add('hidden');
+    }
+
+    btnCamToggle.addEventListener('click', () => {
+      playAudio('click');
+      if (isCameraActive) {
+        fallbackToDemoMode();
+        showNotification('MODUS DEMO SIMULASI AKTIF');
+      } else {
+        startWebcam();
+        showNotification('MENGHUBUNGKAN KAMERA DEPAN...');
+      }
+    });
+
+    // Auto-request camera on initial page load
+    window.addEventListener('DOMContentLoaded', () => {
+      startWebcam();
+    });
+
+    // ==========================================
+    // AUTO-EQUIP ENGINE & TRIGGERS
+    // ==========================================
+    const btnAutoEquip = document.getElementById('btnAutoEquip');
+    const autoEquipLabel = document.getElementById('autoEquipLabel');
+
+    function triggerAutoEquip() {
+      const armor = ARMOR_LIST[currentArmorIndex];
+      isEquipped = true;
+      isEquipScanning = true;
+      scanStartTime = performance.now();
+      document.getElementById('scan-overlay').style.display = 'block';
+      playAudio('equip');
+      showNotification(`⚡ DETEKSI TUBUH: AUTO-EQUIP ${armor.name}`);
+    }
+
+    btnAutoEquip.addEventListener('click', () => {
+      autoEquipEnabled = !autoEquipEnabled;
+      playAudio('click');
+      if (autoEquipEnabled) {
+        btnAutoEquip.classList.add('active-cyan');
+        autoEquipLabel.textContent = 'AUTO: ON';
+        showNotification('⚡ AUTO-EQUIP: AKTIF');
+        triggerAutoEquip();
+      } else {
+        btnAutoEquip.classList.remove('active-cyan');
+        autoEquipLabel.textContent = 'AUTO: OFF';
+        showNotification('AUTO-EQUIP: NONAKTIF');
+      }
+    });
+
+    // Next Pose Button (Demo mode stance switcher)
+    const btnNextPose = document.getElementById('btnNextPose');
+    btnNextPose.addEventListener('click', () => {
+      playAudio('click');
+      poseModeIndex = (poseModeIndex + 1) % POSE_MODES.length;
+      camToggleLabel.textContent = isDemoMode ? 'DEMO: ' + POSE_MODES[poseModeIndex] : 'FRONT CAM';
+      showNotification('POSE: ' + POSE_MODES[poseModeIndex]);
+      if (autoEquipEnabled) {
+        triggerAutoEquip();
+      }
+    });
+
+    // Bones / Skeleton Toggle
+    const btnBones = document.getElementById('btnBones');
+    btnBones.addEventListener('click', () => {
+      playAudio('click');
+      showSkeleton = !showSkeleton;
+      if (showSkeleton) {
+        btnBones.classList.add('active-green');
+        showNotification('SKELETON TRACKING: AKTIF');
+      } else {
+        btnBones.classList.remove('active-green');
+        showNotification('SKELETON: NONAKTIF');
+      }
+    });
+
+    // ==========================================
+    // ARMOR DRAWER / PANEL LOGIC
+    // ==========================================
+    const btnArmorMenu = document.getElementById('btnArmorMenu');
+    const armorDrawerBackdrop = document.getElementById('armorDrawerBackdrop');
+    const btnCloseDrawer = document.getElementById('btnCloseDrawer');
+    const btnPrevDrawer = document.getElementById('btnPrevDrawer');
+    const btnNextDrawer = document.getElementById('btnNextDrawer');
+    const drawerArmorName = document.getElementById('drawerArmorName');
+    const drawerArmorCategory = document.getElementById('drawerArmorCategory');
+    const drawerPreviewImg = document.getElementById('drawerPreviewImg');
+    const drawerStatDef = document.getElementById('drawerStatDef');
+    const drawerStatAgi = document.getElementById('drawerStatAgi');
+    const drawerStatPwr = document.getElementById('drawerStatPwr');
+    const btnDrawerEquip = document.getElementById('btnDrawerEquip');
+    const drawerEquipText = document.getElementById('drawerEquipText');
+    const armorBtnSub = document.getElementById('armorBtnSub');
+    const drawerTitleDot = document.getElementById('drawerTitleDot');
+
+    function updateDrawerUI() {
+      const a = ARMOR_LIST[currentArmorIndex];
+      drawerArmorName.textContent = a.name;
+      drawerArmorName.style.color = a.themeColor;
+      drawerArmorCategory.textContent = a.category;
+      drawerArmorCategory.style.color = a.themeColor;
+      drawerPreviewImg.src = a.preview;
+      drawerStatDef.textContent = a.def + '%';
+      drawerStatAgi.textContent = a.agi + '%';
+      drawerStatPwr.textContent = a.pwr + '%';
+      drawerTitleDot.style.background = a.themeColor;
+      armorBtnSub.textContent = isEquipped ? a.name : 'UNEQUIPPED';
+      armorBtnSub.style.color = a.themeColor;
+
+      if (a.id === 'cyber_knight') {
+        btnDrawerEquip.classList.remove('dark-knight');
+      } else {
+        btnDrawerEquip.classList.add('dark-knight');
+      }
+
+      if (isEquipped) {
+        drawerEquipText.textContent = 'EQUIPPED • RE-CALIBRATE';
+      } else {
+        drawerEquipText.textContent = 'EQUIP ' + a.name;
+      }
+    }
+
+    function openDrawer() {
+      isDrawerOpen = true;
+      armorDrawerBackdrop.classList.add('open');
+      btnArmorMenu.classList.add('open');
+      updateDrawerUI();
+      playAudio('click');
+    }
+
+    function closeDrawer() {
+      isDrawerOpen = false;
+      armorDrawerBackdrop.classList.remove('open');
+      btnArmorMenu.classList.remove('open');
+      playAudio('click');
+    }
+
+    btnArmorMenu.addEventListener('click', () => {
+      if (isDrawerOpen) closeDrawer();
+      else openDrawer();
+    });
+
+    btnCloseDrawer.addEventListener('click', closeDrawer);
+    armorDrawerBackdrop.addEventListener('click', (e) => {
+      if (e.target === armorDrawerBackdrop) closeDrawer();
+    });
+
+    btnPrevDrawer.addEventListener('click', () => {
+      currentArmorIndex = (currentArmorIndex - 1 + ARMOR_LIST.length) % ARMOR_LIST.length;
+      updateDrawerUI();
+      playAudio('click');
+      if (autoEquipEnabled) triggerAutoEquip();
+    });
+
+    btnNextDrawer.addEventListener('click', () => {
+      currentArmorIndex = (currentArmorIndex + 1) % ARMOR_LIST.length;
+      updateDrawerUI();
+      playAudio('click');
+      if (autoEquipEnabled) triggerAutoEquip();
+    });
+
+    btnDrawerEquip.addEventListener('click', () => {
+      closeDrawer();
+      triggerAutoEquip();
+    });
+
+    // ==========================================
+    // CANVAS & 60FPS AR RENDER ENGINE
     // ==========================================
     const canvas = document.getElementById('arCanvas');
     const ctx = canvas.getContext('2d');
-    const video = document.getElementById('webcam');
 
     function resizeCanvas() {
       canvas.width = window.innerWidth;
@@ -688,8 +1072,8 @@
     window.addEventListener('resize', resizeCanvas);
     resizeCanvas();
 
-    // Virtual Landmark Simulation
-    function getSimulatedPose(time) {
+    // Body Landmark Kinematics Generator
+    function getPoseLandmarks(time) {
       const t = time * 0.001;
       const w = canvas.width;
       const h = canvas.height;
@@ -697,7 +1081,6 @@
       const cy = h * 0.52;
       const scale = Math.min(w, h) * 0.72;
 
-      // Base proportions
       let headY = cy - scale * 0.44;
       let leftShoulderX = cx - scale * 0.18;
       let rightShoulderX = cx + scale * 0.18;
@@ -727,20 +1110,18 @@
       let rightAnkleX = cx + scale * 0.14;
       let rightAnkleY = cy + scale * 0.46;
 
-      // Subtle breathing motion
+      // Natural breathing sway
       const breath = Math.sin(t * 2) * (scale * 0.008);
       shoulderY += breath;
       headY += breath * 0.8;
 
-      // Mode-specific movement
-      const mode = poseModes[poseModeIndex];
+      const mode = POSE_MODES[poseModeIndex];
       if (mode === 'WAVE') {
         rightElbowY = cy - scale * 0.32;
         rightElbowX = cx + scale * 0.30;
         rightWristX = cx + scale * (0.32 + Math.sin(t * 5) * 0.08);
         rightWristY = cy - scale * (0.45 + Math.cos(t * 5) * 0.03);
       } else if (mode === 'COMBAT') {
-        // Sword Stance
         leftElbowX = cx - scale * 0.12;
         leftElbowY = cy - scale * 0.16;
         leftWristX = cx + scale * 0.02;
@@ -759,7 +1140,6 @@
         rightKneeY -= walkSin * (scale * 0.04);
         leftAnkleY += walkSin * (scale * 0.05);
         rightAnkleY -= walkSin * (scale * 0.05);
-
         leftWristY += walkSin * (scale * 0.06);
         rightWristY -= walkSin * (scale * 0.06);
       }
@@ -783,16 +1163,38 @@
     }
 
     // ==========================================
-    // ARMOR ART RENDERERS
+    // ANATOMICAL FIT ARTWORK PIPELINE
+    // ("Kayak pake armor asli")
     // ==========================================
-    // Wearable Anatomical Fit Helpers ("Kayak pake armor asli")
-    function drawAnatomicalUndersuit(ctx, pose, isCyber, scanCutoff) {
-      const { leftShoulder, rightShoulder, leftElbow, rightElbow, leftWrist, rightWrist, leftHip, rightHip, leftKnee, rightKnee, leftAnkle, rightAnkle, scale } = pose;
-      const baseColor = isCyber ? '#0b1120' : '#0d1017';
-      const seamColor = isCyber ? 'rgba(0, 229, 255, 0.35)' : '#1e293b';
+    function drawLimbSegment(ctx, p1, p2, width, fill, stroke, scanCutoff) {
+      const midY = (p1.y + p2.y) * 0.5;
+      if (midY < scanCutoff) return;
+
+      const angle = Math.atan2(p2.y - p1.y, p2.x - p1.x);
+      const len = Math.hypot(p2.x - p1.x, p2.y - p1.y);
 
       ctx.save();
-      // 1. Torso body-glove
+      ctx.translate(p1.x, p1.y);
+      ctx.rotate(angle);
+      ctx.fillStyle = fill;
+      ctx.strokeStyle = stroke;
+      ctx.lineWidth = 2;
+
+      ctx.beginPath();
+      ctx.roundRect(0, -width * 0.5, len, width, width * 0.3);
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // Anatomical Undersuit: forms the base compression suit so armor fits physically
+    function drawAnatomicalUndersuit(ctx, pose, isCyber, scanCutoff) {
+      const { leftShoulder, rightShoulder, leftElbow, rightElbow, leftWrist, rightWrist, leftHip, rightHip, leftKnee, rightKnee, leftAnkle, rightAnkle } = pose;
+      const baseColor = isCyber ? '#090e18' : '#0a0d14';
+      const seamColor = isCyber ? 'rgba(0, 240, 255, 0.4)' : '#1e293b';
+
+      ctx.save();
+      // 1. Torso compression glove
       if (leftShoulder.y >= scanCutoff) {
         ctx.fillStyle = baseColor;
         ctx.strokeStyle = seamColor;
@@ -807,13 +1209,12 @@
         ctx.stroke();
       }
 
-      // 2. Arms sleeves
+      // 2. Arms & Legs body glove
       drawLimbSegment(ctx, leftShoulder, leftElbow, 24, baseColor, seamColor, scanCutoff);
       drawLimbSegment(ctx, rightShoulder, rightElbow, 24, baseColor, seamColor, scanCutoff);
       drawLimbSegment(ctx, leftElbow, leftWrist, 18, baseColor, seamColor, scanCutoff);
       drawLimbSegment(ctx, rightElbow, rightWrist, 18, baseColor, seamColor, scanCutoff);
 
-      // 3. Legs tights
       drawLimbSegment(ctx, leftHip, leftKnee, 26, baseColor, seamColor, scanCutoff);
       drawLimbSegment(ctx, rightHip, rightKnee, 26, baseColor, seamColor, scanCutoff);
       drawLimbSegment(ctx, leftKnee, leftAnkle, 20, baseColor, seamColor, scanCutoff);
@@ -821,6 +1222,7 @@
       ctx.restore();
     }
 
+    // Neck Gorget Collar: anchors armor plates between chest and helmet
     function drawNeckGorget(ctx, leftShoulder, rightShoulder, nose, isCyber, scanCutoff) {
       const midShoulderX = (leftShoulder.x + rightShoulder.x) * 0.5;
       const midShoulderY = (leftShoulder.y + rightShoulder.y) * 0.5;
@@ -830,7 +1232,7 @@
       const w = Math.abs(rightShoulder.x - leftShoulder.x) * 0.38;
       ctx.save();
       ctx.fillStyle = isCyber ? '#1e293b' : '#1e222d';
-      ctx.strokeStyle = isCyber ? '#00e5ff' : '#94a3b8';
+      ctx.strokeStyle = isCyber ? '#00f0ff' : '#cbd5e1';
       ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.moveTo(midShoulderX - w * 0.5, midShoulderY);
@@ -843,6 +1245,7 @@
       ctx.restore();
     }
 
+    // ARMOR 1: DARK KNIGHT (Gothic Fantasy Steel, Cowl, Flowing Cape, Greatsword)
     function drawDarkKnight(ctx, pose, time, scanCutoff) {
       const t = time * 0.001;
       const { nose, leftShoulder, rightShoulder, leftElbow, rightElbow, leftWrist, rightWrist, leftHip, rightHip, leftKnee, rightKnee, leftAnkle, rightAnkle, scale } = pose;
@@ -852,28 +1255,24 @@
       const hipMidX = (leftHip.x + rightHip.x) * 0.5;
       const hipMidY = (leftHip.y + rightHip.y) * 0.5;
 
-      // 0. Anatomical Under-Armor Compression Suit
+      // 0. Anatomical Undersuit
       drawAnatomicalUndersuit(ctx, pose, false, scanCutoff);
 
-      // 1. Flowing Midnight Cape (behind torso)
-      if (shoulderYCutoff(leftShoulder.y, scanCutoff)) {
+      // 1. Flowing Midnight Cape
+      if (leftShoulder.y >= scanCutoff) {
         ctx.save();
         ctx.fillStyle = '#0f1117';
         ctx.beginPath();
         ctx.moveTo(leftShoulder.x - 10, leftShoulder.y);
         ctx.lineTo(rightShoulder.x + 10, rightShoulder.y);
-
-        // Simulated cape bottom ripples
         const capeBottomY = leftAnkle.y - 20;
         const wave1 = Math.sin(t * 3) * 20;
         const wave2 = Math.cos(t * 2.5) * 25;
-
         ctx.quadraticCurveTo(rightShoulder.x + 50 + wave1, hipMidY + 50, rightShoulder.x + 60 + wave2, capeBottomY);
         ctx.lineTo(leftShoulder.x - 60 + wave1, capeBottomY);
         ctx.quadraticCurveTo(leftShoulder.x - 50 + wave2, hipMidY + 50, leftShoulder.x - 10, leftShoulder.y);
         ctx.closePath();
         ctx.fill();
-
         ctx.strokeStyle = '#2d3342';
         ctx.lineWidth = 2;
         ctx.stroke();
@@ -885,16 +1284,12 @@
         ctx.save();
         ctx.translate(chestX + 25, chestY - 40);
         ctx.rotate(-0.4);
-        // Blade
         ctx.fillStyle = '#e2e8f0';
         ctx.fillRect(-6, -scale * 0.45, 12, scale * 0.5);
-        // Fullers
         ctx.fillStyle = '#1e293b';
         ctx.fillRect(-2, -scale * 0.42, 4, scale * 0.45);
-        // Crossguard
         ctx.fillStyle = '#475569';
         ctx.fillRect(-25, scale * 0.05, 50, 10);
-        // Pommel & Grip
         ctx.fillStyle = '#0f172a';
         ctx.fillRect(-4, scale * 0.07, 8, 30);
         ctx.beginPath();
@@ -904,28 +1299,22 @@
         ctx.restore();
       }
 
-      // 3. Leg Greaves & Sabatons
+      // 3. Leg Greaves
       drawLimbSegment(ctx, leftKnee, leftAnkle, 18, '#1e222d', '#94a3b8', scanCutoff);
       drawLimbSegment(ctx, rightKnee, rightAnkle, 18, '#1e222d', '#94a3b8', scanCutoff);
       drawLimbSegment(ctx, leftHip, leftKnee, 22, '#181b24', '#64748b', scanCutoff);
       drawLimbSegment(ctx, rightHip, rightKnee, 22, '#181b24', '#64748b', scanCutoff);
 
-      // 4. Gothic Cuirass & Faulds (Chestplate)
+      // 4. Gothic Cuirass
       if (chestY >= scanCutoff) {
         ctx.save();
-        const chestWidth = Math.abs(rightShoulder.x - leftShoulder.x) * 1.1;
-        const chestHeight = Math.abs(hipMidY - leftShoulder.y) * 1.1;
-
-        // Dark steel base
         const grad = ctx.createLinearGradient(leftShoulder.x, leftShoulder.y, rightShoulder.x, hipMidY);
         grad.addColorStop(0, '#334155');
         grad.addColorStop(0.5, '#0f172a');
         grad.addColorStop(1, '#1e293b');
-
         ctx.fillStyle = grad;
-        ctx.strokeStyle = '#94a3b8';
+        ctx.strokeStyle = '#cbd5e1';
         ctx.lineWidth = 3;
-
         ctx.beginPath();
         ctx.moveTo(leftShoulder.x, leftShoulder.y);
         ctx.lineTo(rightShoulder.x, rightShoulder.y);
@@ -936,7 +1325,6 @@
         ctx.fill();
         ctx.stroke();
 
-        // Center spine ridge
         ctx.beginPath();
         ctx.moveTo(chestX, leftShoulder.y);
         ctx.lineTo(chestX, hipMidY + 20);
@@ -944,7 +1332,6 @@
         ctx.lineWidth = 4;
         ctx.stroke();
 
-        // Gold Filigree Accent
         ctx.beginPath();
         ctx.arc(chestX, chestY - 10, 14, 0, Math.PI * 2);
         ctx.strokeStyle = '#f59e0b';
@@ -965,19 +1352,17 @@
       drawLimbSegment(ctx, leftElbow, leftWrist, 14, '#334155', '#e2e8f0', scanCutoff);
       drawLimbSegment(ctx, rightElbow, rightWrist, 14, '#334155', '#e2e8f0', scanCutoff);
 
-      // 6.5 Neck Gorget (bridges chest to helmet)
+      // 6.5 Neck Gorget
       drawNeckGorget(ctx, leftShoulder, rightShoulder, nose, false, scanCutoff);
 
       // 7. Dark Midnight Cowl & Gothic Helmet
       if (nose.y >= scanCutoff) {
         ctx.save();
         const headRadius = scale * 0.11;
-
-        // Pointed Cowl Hood
         ctx.fillStyle = '#0f1117';
         ctx.beginPath();
         ctx.moveTo(nose.x - headRadius * 1.3, nose.y + headRadius * 0.8);
-        ctx.lineTo(nose.x, nose.y - headRadius * 1.55); // Top point
+        ctx.lineTo(nose.x, nose.y - headRadius * 1.55);
         ctx.lineTo(nose.x + headRadius * 1.3, nose.y + headRadius * 0.8);
         ctx.closePath();
         ctx.fill();
@@ -985,21 +1370,21 @@
         ctx.lineWidth = 2;
         ctx.stroke();
 
-        // Steel face mask & Dark Eye Slit
         ctx.fillStyle = '#1e293b';
         ctx.beginPath();
         ctx.arc(nose.x, nose.y, headRadius * 0.85, 0, Math.PI * 2);
         ctx.fill();
+        ctx.strokeStyle = '#cbd5e1';
+        ctx.lineWidth = 2;
+        ctx.stroke();
 
-        // Eye slit with glowing crimson/gold embers
-        ctx.fillStyle = '#000';
-        ctx.fillRect(nose.x - headRadius * 0.6, nose.y - 6, headRadius * 1.2, 10);
-
-        ctx.fillStyle = '#fbbf24';
-        ctx.shadowColor = '#f59e0b';
-        ctx.shadowBlur = 12;
-        ctx.fillRect(nose.x - headRadius * 0.45, nose.y - 3, headRadius * 0.35, 4);
-        ctx.fillRect(nose.x + headRadius * 0.1, nose.y - 3, headRadius * 0.35, 4);
+        // Eye Slit Visor
+        ctx.fillStyle = '#000000';
+        ctx.fillRect(nose.x - headRadius * 0.5, nose.y - 4, headRadius, 7);
+        ctx.fillStyle = '#ffb300';
+        ctx.shadowColor = '#ffb300';
+        ctx.shadowBlur = 10;
+        ctx.fillRect(nose.x - headRadius * 0.35, nose.y - 2, headRadius * 0.7, 3);
         ctx.restore();
       }
     }
@@ -1008,20 +1393,18 @@
       ctx.save();
       ctx.translate(x, y);
       ctx.fillStyle = '#1e293b';
-      ctx.strokeStyle = '#94a3b8';
-      ctx.lineWidth = 2.5;
+      ctx.strokeStyle = '#cbd5e1';
+      ctx.lineWidth = 2;
 
-      // Tier 1
       ctx.beginPath();
-      ctx.moveTo(-15 * dir, -10);
-      ctx.lineTo(35 * dir, -18);
-      ctx.lineTo(48 * dir, 5);
-      ctx.lineTo(10 * dir, 20);
+      ctx.moveTo(0, 0);
+      ctx.lineTo(35 * dir, -20);
+      ctx.lineTo(45 * dir, 10);
+      ctx.lineTo(10 * dir, 30);
       ctx.closePath();
       ctx.fill();
       ctx.stroke();
 
-      // Sharp Spike
       ctx.beginPath();
       ctx.moveTo(25 * dir, -15);
       ctx.lineTo(55 * dir, -35);
@@ -1029,10 +1412,10 @@
       ctx.fillStyle = '#cbd5e1';
       ctx.fill();
       ctx.stroke();
-
       ctx.restore();
     }
 
+    // ARMOR 2: CYBER KNIGHT (Ceramic Exosuit, Cyan Conduits, Arc Reactor, V-Visor)
     function drawCyberKnight(ctx, pose, time, scanCutoff) {
       const t = time * 0.001;
       const { nose, leftShoulder, rightShoulder, leftElbow, rightElbow, leftWrist, rightWrist, leftHip, rightHip, leftKnee, rightKnee, leftAnkle, rightAnkle, scale } = pose;
@@ -1042,25 +1425,23 @@
       const hipMidX = (leftHip.x + rightHip.x) * 0.5;
       const hipMidY = (leftHip.y + rightHip.y) * 0.5;
 
-      // 0. Anatomical Under-Armor Nano-Compression Suit
+      // 0. Anatomical Nano-Suit
       drawAnatomicalUndersuit(ctx, pose, true, scanCutoff);
 
-      // 1. Ceramic Exosuit Legs with Cyan Conduits
+      // 1. Ceramic Exosuit Legs
       drawCyberLimb(ctx, leftKnee, leftAnkle, 20, scanCutoff, t);
       drawCyberLimb(ctx, rightKnee, rightAnkle, 20, scanCutoff, t);
       drawCyberLimb(ctx, leftHip, leftKnee, 24, scanCutoff, t);
       drawCyberLimb(ctx, rightHip, rightKnee, 24, scanCutoff, t);
 
-      // 2. Torso Exosuit with Carbon Fiber & Arc Reactor
+      // 2. Torso Exosuit & Arc Reactor
       if (chestY >= scanCutoff) {
         ctx.save();
-        // Ceramic White Base
         ctx.fillStyle = '#f8fafc';
-        ctx.strokeStyle = '#00e5ff';
+        ctx.strokeStyle = '#00f0ff';
         ctx.lineWidth = 2;
-        ctx.shadowColor = 'rgba(0, 229, 255, 0.4)';
+        ctx.shadowColor = 'rgba(0, 240, 255, 0.4)';
         ctx.shadowBlur = 8;
-
         ctx.beginPath();
         ctx.moveTo(leftShoulder.x - 5, leftShoulder.y);
         ctx.lineTo(rightShoulder.x + 5, rightShoulder.y);
@@ -1071,7 +1452,6 @@
         ctx.fill();
         ctx.stroke();
 
-        // Carbon fiber inner ribs
         ctx.fillStyle = '#0f172a';
         ctx.beginPath();
         ctx.moveTo(chestX - 25, chestY - 15);
@@ -1081,14 +1461,13 @@
         ctx.closePath();
         ctx.fill();
 
-        // Pulsing Chest Arc Reactor
+        // Pulsing Arc Reactor
         const pulse = 1 + Math.sin(t * 6) * 0.15;
         const reactorRadius = 16 * pulse;
-
         ctx.beginPath();
         ctx.arc(chestX, chestY - 5, reactorRadius, 0, Math.PI * 2);
-        ctx.fillStyle = '#00e5ff';
-        ctx.shadowColor = '#00e5ff';
+        ctx.fillStyle = '#00f0ff';
+        ctx.shadowColor = '#00f0ff';
         ctx.shadowBlur = 24;
         ctx.fill();
 
@@ -1097,20 +1476,18 @@
         ctx.fillStyle = '#ffffff';
         ctx.fill();
 
-        // Neon energy conduit lines
         ctx.beginPath();
         ctx.moveTo(chestX, chestY - 5);
         ctx.lineTo(leftShoulder.x, leftShoulder.y);
         ctx.moveTo(chestX, chestY - 5);
         ctx.lineTo(rightShoulder.x, rightShoulder.y);
-        ctx.strokeStyle = '#00e5ff';
+        ctx.strokeStyle = '#00f0ff';
         ctx.lineWidth = 2;
         ctx.stroke();
-
         ctx.restore();
       }
 
-      // 3. Cyber Pauldrons (Aerodynamic Winged Plates)
+      // 3. Cyber Pauldrons
       if (leftShoulder.y >= scanCutoff) {
         drawCyberPauldron(ctx, leftShoulder.x, leftShoulder.y, -1, t);
         drawCyberPauldron(ctx, rightShoulder.x, rightShoulder.y, 1, t);
@@ -1122,185 +1499,167 @@
       drawCyberLimb(ctx, leftElbow, leftWrist, 16, scanCutoff, t);
       drawCyberLimb(ctx, rightElbow, rightWrist, 16, scanCutoff, t);
 
-      // 4.5 Ceramic Neck Gorget Collar
+      // 4.5 Neck Gorget
       drawNeckGorget(ctx, leftShoulder, rightShoulder, nose, true, scanCutoff);
 
       // 5. Aerodynamic Helmet & Glowing Cyan Chevron V-Visor
       if (nose.y >= scanCutoff) {
         ctx.save();
         const headRadius = scale * 0.11;
-
-        // White Composite Shell
         ctx.fillStyle = '#f8fafc';
-        ctx.strokeStyle = '#00e5ff';
+        ctx.strokeStyle = '#00f0ff';
         ctx.lineWidth = 2.5;
-        ctx.shadowColor = '#00e5ff';
+        ctx.shadowColor = '#00f0ff';
         ctx.shadowBlur = 10;
-
         ctx.beginPath();
         ctx.arc(nose.x, nose.y, headRadius, 0, Math.PI * 2);
         ctx.fill();
         ctx.stroke();
 
-        // Ear Fin Thrusters
         ctx.fillStyle = '#0f172a';
         ctx.fillRect(nose.x - headRadius - 8, nose.y - 12, 10, 24);
         ctx.fillRect(nose.x + headRadius - 2, nose.y - 12, 10, 24);
 
-        // Cyan Glowing Chevron V-Visor
-        ctx.shadowColor = '#00e5ff';
-        ctx.shadowBlur = 18;
-        ctx.fillStyle = '#00e5ff';
-
+        // Glowing Chevron V-Visor
+        ctx.shadowColor = '#00f0ff';
+        ctx.shadowBlur = 20;
+        ctx.fillStyle = '#00f0ff';
         ctx.beginPath();
         ctx.moveTo(nose.x - headRadius * 0.65, nose.y - 10);
-        ctx.lineTo(nose.x, nose.y + 12);
+        ctx.lineTo(nose.x, nose.y + headRadius * 0.25);
         ctx.lineTo(nose.x + headRadius * 0.65, nose.y - 10);
-        ctx.lineTo(nose.x + headRadius * 0.5, nose.y - 16);
-        ctx.lineTo(nose.x, nose.y + 4);
-        ctx.lineTo(nose.x - headRadius * 0.5, nose.y - 16);
+        ctx.lineTo(nose.x + headRadius * 0.5, nose.y - 14);
+        ctx.lineTo(nose.x, nose.y);
+        ctx.lineTo(nose.x - headRadius * 0.5, nose.y - 14);
         ctx.closePath();
         ctx.fill();
-
-        // Visor Highlight
-        ctx.fillStyle = '#ffffff';
-        ctx.beginPath();
-        ctx.arc(nose.x, nose.y + 4, 3, 0, Math.PI * 2);
-        ctx.fill();
-
         ctx.restore();
       }
+    }
+
+    function drawCyberLimb(ctx, p1, p2, width, scanCutoff, t) {
+      const midY = (p1.y + p2.y) * 0.5;
+      if (midY < scanCutoff) return;
+
+      const angle = Math.atan2(p2.y - p1.y, p2.x - p1.x);
+      const len = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+
+      ctx.save();
+      ctx.translate(p1.x, p1.y);
+      ctx.rotate(angle);
+      ctx.fillStyle = '#f8fafc';
+      ctx.strokeStyle = '#00f0ff';
+      ctx.lineWidth = 1.5;
+      ctx.shadowColor = 'rgba(0, 240, 255, 0.4)';
+      ctx.shadowBlur = 6;
+
+      ctx.beginPath();
+      ctx.roundRect(0, -width * 0.5, len, width, 6);
+      ctx.fill();
+      ctx.stroke();
+
+      // Pulsing cyan energy stripe
+      const stripePulse = 0.5 + Math.sin(t * 8) * 0.5;
+      ctx.fillStyle = `rgba(0, 240, 255, ${0.4 + stripePulse * 0.6})`;
+      ctx.fillRect(len * 0.2, -1.5, len * 0.6, 3);
+      ctx.restore();
     }
 
     function drawCyberPauldron(ctx, x, y, dir, t) {
       ctx.save();
       ctx.translate(x, y);
       ctx.fillStyle = '#f8fafc';
-      ctx.strokeStyle = '#00e5ff';
+      ctx.strokeStyle = '#00f0ff';
       ctx.lineWidth = 2;
-      ctx.shadowColor = '#00e5ff';
+      ctx.shadowColor = '#00f0ff';
       ctx.shadowBlur = 10;
 
-      // Angled wing plate
       ctx.beginPath();
-      ctx.moveTo(-10 * dir, -12);
-      ctx.lineTo(40 * dir, -22);
-      ctx.lineTo(48 * dir, 12);
-      ctx.lineTo(10 * dir, 18);
+      ctx.moveTo(0, 0);
+      ctx.lineTo(40 * dir, -25);
+      ctx.lineTo(55 * dir, 5);
+      ctx.lineTo(15 * dir, 25);
       ctx.closePath();
       ctx.fill();
       ctx.stroke();
 
-      // Energy Vent
-      ctx.fillStyle = '#00e5ff';
-      ctx.fillRect(20 * dir, -12, 16 * dir, 4);
-
+      ctx.fillStyle = '#00f0ff';
+      ctx.fillRect(15 * dir, -10, 20 * dir, 3);
       ctx.restore();
     }
 
-    function drawCyberLimb(ctx, p1, p2, width, scanCutoff, t) {
-      if (Math.min(p1.y, p2.y) < scanCutoff && Math.max(p1.y, p2.y) < scanCutoff) return;
+    // Skeleton Bones Overlay
+    function drawSkeleton(ctx, pose) {
       ctx.save();
-      const dx = p2.x - p1.x;
-      const dy = p2.y - p1.y;
-      const angle = Math.atan2(dy, dx);
-      const dist = Math.hypot(dx, dy);
-
-      ctx.translate(p1.x, p1.y);
-      ctx.rotate(angle);
-
-      // Ceramic Outer Shell
-      ctx.fillStyle = '#f8fafc';
-      ctx.strokeStyle = '#00e5ff';
+      ctx.strokeStyle = '#00ff66';
       ctx.lineWidth = 2;
-      ctx.shadowColor = 'rgba(0, 229, 255, 0.4)';
-      ctx.shadowBlur = 6;
-      ctx.fillRect(5, -width * 0.5, dist - 10, width);
-      ctx.strokeRect(5, -width * 0.5, dist - 10, width);
+      ctx.shadowColor = '#00ff66';
+      ctx.shadowBlur = 8;
+      ctx.fillStyle = '#ffffff';
 
-      // Center Conduit Line
-      ctx.strokeStyle = '#00e5ff';
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.moveTo(10, 0);
-      ctx.lineTo(dist - 10, 0);
-      ctx.stroke();
+      const joints = [
+        pose.nose, pose.leftShoulder, pose.rightShoulder,
+        pose.leftElbow, pose.rightElbow, pose.leftWrist, pose.rightWrist,
+        pose.leftHip, pose.rightHip, pose.leftKnee, pose.rightKnee,
+        pose.leftAnkle, pose.rightAnkle
+      ];
 
+      const bones = [
+        [pose.leftShoulder, pose.rightShoulder],
+        [pose.leftShoulder, pose.leftElbow],
+        [pose.leftElbow, pose.leftWrist],
+        [pose.rightShoulder, pose.rightElbow],
+        [pose.rightElbow, pose.rightWrist],
+        [pose.leftShoulder, pose.leftHip],
+        [pose.rightShoulder, pose.rightHip],
+        [pose.leftHip, pose.rightHip],
+        [pose.leftHip, pose.leftKnee],
+        [pose.leftKnee, pose.leftAnkle],
+        [pose.rightHip, pose.rightKnee],
+        [pose.rightKnee, pose.rightAnkle]
+      ];
+
+      bones.forEach(([a, b]) => {
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
+        ctx.stroke();
+      });
+
+      joints.forEach(j => {
+        ctx.beginPath();
+        ctx.arc(j.x, j.y, 4, 0, Math.PI * 2);
+        ctx.fill();
+      });
       ctx.restore();
-    }
-
-    function drawLimbSegment(ctx, p1, p2, width, fill, stroke, scanCutoff) {
-      if (Math.min(p1.y, p2.y) < scanCutoff && Math.max(p1.y, p2.y) < scanCutoff) return;
-      ctx.save();
-      const dx = p2.x - p1.x;
-      const dy = p2.y - p1.y;
-      const angle = Math.atan2(dy, dx);
-      const dist = Math.hypot(dx, dy);
-
-      ctx.translate(p1.x, p1.y);
-      ctx.rotate(angle);
-
-      ctx.fillStyle = fill;
-      ctx.strokeStyle = stroke;
-      ctx.lineWidth = 2;
-      ctx.fillRect(4, -width * 0.5, dist - 8, width);
-      ctx.strokeRect(4, -width * 0.5, dist - 8, width);
-
-      ctx.restore();
-    }
-
-    function shoulderYCutoff(y, scanCutoff) {
-      return y >= scanCutoff - 50;
     }
 
     // ==========================================
-    // MAIN RENDER LOOP
+    // MAIN 60 FPS RENDER LOOP
     // ==========================================
-    let lastFpsTime = performance.now();
-    let frameCount = 0;
-    let currentFps = 60;
-
     function renderLoop(now) {
-      frameCount++;
-      if (now - lastFpsTime >= 1000) {
-        currentFps = frameCount;
-        frameCount = 0;
-        lastFpsTime = now;
-      }
-
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // 1. Render Video feed if camera is active
-      if (cameraActive && video.readyState >= 2) {
+      // 1. Draw live camera video feed if active
+      if (isCameraActive && video.readyState >= 2) {
         ctx.save();
         ctx.translate(canvas.width, 0);
         ctx.scale(-1, 1);
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
         ctx.restore();
-
-        // Dark sci-fi vignette tint
-        ctx.fillStyle = 'rgba(7, 10, 18, 0.45)';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
       } else {
-        // Virtual Holo-Chamber Background
-        const grad = ctx.createRadialGradient(
-          canvas.width * 0.5, canvas.height * 0.5, 40,
-          canvas.width * 0.5, canvas.height * 0.5, canvas.width * 0.8
-        );
-        grad.addColorStop(0, '#101626');
-        grad.addColorStop(1, '#05070c');
-        ctx.fillStyle = grad;
+        // Holographic Holodeck sci-fi backdrop (when demo mode)
+        ctx.save();
+        ctx.fillStyle = '#030712';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-        // Holographic floor grid
-        ctx.save();
-        ctx.strokeStyle = 'rgba(0, 229, 255, 0.12)';
+        ctx.strokeStyle = 'rgba(0, 240, 255, 0.12)';
         ctx.lineWidth = 1;
         const gridY = canvas.height * 0.76;
         for (let i = -10; i <= 10; i++) {
           ctx.beginPath();
           ctx.moveTo(canvas.width * 0.5 + i * 40, gridY);
-          ctx.lineTo(canvas.width * 0.5 + i * 160, canvas.height);
+          ctx.lineTo(canvas.width * 0.5 + i * 180, canvas.height);
           ctx.stroke();
         }
         for (let y = gridY; y <= canvas.height; y += 22) {
@@ -1312,31 +1671,28 @@
         ctx.restore();
       }
 
-      // 2. Get landmarks (Simulated or Real Tracking)
-      const pose = getSimulatedPose(now);
+      // 2. Obtain Body Kinematics
+      const pose = getPoseLandmarks(now);
 
-      // 3. Calculate Equip Laser Scanning (Feet to Head)
-      let scanCutoffY = 0; // Everything visible
-      if (isEquipping) {
+      // 3. Feet-to-Head Laser Scanline Animation
+      let scanCutoffY = 0;
+      if (isEquipScanning) {
         const elapsed = now - scanStartTime;
         const progress = Math.min(1.0, elapsed / SCAN_DURATION);
-        // Animate from feet (highest Y) to head (lowest Y)
         const feetY = pose.leftAnkle.y + 40;
         const headTopY = pose.nose.y - pose.scale * 0.2;
         scanCutoffY = feetY - (feetY - headTopY) * progress;
 
-        // Position scan line
-        const scanLine = document.getElementById('scanLine');
-        scanLine.style.top = scanCutoffY + 'px';
+        const laserLine = document.getElementById('laserLine');
+        laserLine.style.top = scanCutoffY + 'px';
 
-        // Draw laser scan glowing plane
         ctx.save();
-        ctx.fillStyle = armors[currentArmorIndex].id === 'cyber_knight' ? 'rgba(0, 229, 255, 0.2)' : 'rgba(255, 179, 0, 0.2)';
+        ctx.fillStyle = ARMOR_LIST[currentArmorIndex].id === 'cyber_knight' ? 'rgba(0, 240, 255, 0.18)' : 'rgba(203, 213, 225, 0.18)';
         ctx.fillRect(0, scanCutoffY, canvas.width, canvas.height - scanCutoffY);
 
-        ctx.strokeStyle = armors[currentArmorIndex].id === 'cyber_knight' ? '#00e5ff' : '#ffb300';
+        ctx.strokeStyle = ARMOR_LIST[currentArmorIndex].id === 'cyber_knight' ? '#00f0ff' : '#cbd5e1';
         ctx.shadowColor = ctx.strokeStyle;
-        ctx.shadowBlur = 20;
+        ctx.shadowBlur = 18;
         ctx.lineWidth = 3;
         ctx.beginPath();
         ctx.moveTo(0, scanCutoffY);
@@ -1345,17 +1701,25 @@
         ctx.restore();
 
         if (progress >= 1.0) {
-          isEquipping = false;
+          isEquipScanning = false;
           document.getElementById('scan-overlay').style.display = 'none';
+          showNotification(`✅ ARMOR RIGGED TO BODY • ${ARMOR_LIST[currentArmorIndex].name}`);
         }
       }
 
-      // 4. Render Selected Armor
-      const currentArmor = armors[currentArmorIndex];
-      if (currentArmor.id === 'dark_knight') {
-        drawDarkKnight(ctx, pose, now, scanCutoffY);
-      } else {
-        drawCyberKnight(ctx, pose, now, scanCutoffY);
+      // 4. Render Wearable Armor
+      if (isEquipped) {
+        const armor = ARMOR_LIST[currentArmorIndex];
+        if (armor.id === 'dark_knight') {
+          drawDarkKnight(ctx, pose, now, scanCutoffY);
+        } else {
+          drawCyberKnight(ctx, pose, now, scanCutoffY);
+        }
+      }
+
+      // 5. Render Skeleton if toggled
+      if (showSkeleton) {
+        drawSkeleton(ctx, pose);
       }
 
       requestAnimationFrame(renderLoop);
@@ -1363,171 +1727,11 @@
 
     requestAnimationFrame(renderLoop);
 
-    // ==========================================
-    // USER CONTROLS & INTERACTION
-    // ==========================================
-    const btnEquip = document.getElementById('btnEquip');
-    const btnPrev = document.getElementById('btnPrevArmor');
-    const btnNext = document.getElementById('btnNextArmor');
-    const armorName = document.getElementById('armorName');
-    const armorSubtitle = document.getElementById('armorSubtitle');
-    const equipText = document.getElementById('equipText');
-    const statDef = document.getElementById('statDef');
-    const statAgi = document.getElementById('statAgi');
-    const statPwr = document.getElementById('statPwr');
-    const barDef = document.getElementById('barDef');
-    const barAgi = document.getElementById('barAgi');
-    const barPwr = document.getElementById('barPwr');
-    const btnToggleCam = document.getElementById('btnToggleCam');
-    const statusText = document.getElementById('statusText');
-    const btnPoseMode = document.getElementById('btnPoseMode');
-    const poseModeLabel = document.getElementById('poseModeLabel');
-    const btnAudioToggle = document.getElementById('btnAudioToggle');
-    const audioLabel = document.getElementById('audioLabel');
-    const btnSnapshot = document.getElementById('btnSnapshot');
-    const btnInfo = document.getElementById('btnInfo');
-    const infoModal = document.getElementById('infoModal');
-    const btnCloseModal = document.getElementById('btnCloseModal');
-
-    function updateArmorUI() {
-      const a = armors[currentArmorIndex];
-      armorName.textContent = a.name;
-      armorName.style.color = a.id === 'cyber_knight' ? '#00e5ff' : '#ffffff';
-      armorSubtitle.textContent = a.subtitle;
-      equipText.textContent = 'EQUIP ' + a.name;
-
-      statDef.textContent = a.def + '%';
-      statAgi.textContent = a.agi + '%';
-      statPwr.textContent = a.pwr + '%';
-      barDef.style.width = a.def + '%';
-      barAgi.style.width = a.agi + '%';
-      barPwr.style.width = a.pwr + '%';
-
-      if (a.id === 'cyber_knight') {
-        btnEquip.classList.remove('dark-theme-equip');
-      } else {
-        btnEquip.classList.add('dark-theme-equip');
-      }
-      playSound('click');
-    }
-
-    const btnAutoEquip = document.getElementById('btnAutoEquip');
-    const autoEquipLabel = document.getElementById('autoEquipLabel');
-    let autoEquipEnabled = true;
-
-    function triggerEquip() {
-      isEquipping = true;
-      scanStartTime = performance.now();
-      document.getElementById('scan-overlay').style.display = 'block';
-      playSound('equip');
-    }
-
-    if (btnAutoEquip) {
-      btnAutoEquip.addEventListener('click', () => {
-        autoEquipEnabled = !autoEquipEnabled;
-        if (autoEquipEnabled) {
-          btnAutoEquip.style.borderColor = 'rgba(0, 229, 255, 0.6)';
-          btnAutoEquip.style.color = '#00e5ff';
-          autoEquipLabel.textContent = '⚡ AUTO: ON';
-          triggerEquip();
-        } else {
-          btnAutoEquip.style.borderColor = 'rgba(255, 255, 255, 0.2)';
-          btnAutoEquip.style.color = '#94a3b8';
-          autoEquipLabel.textContent = 'AUTO: OFF';
-        }
-        playSound('click');
-      });
-    }
-
-    btnPrev.addEventListener('click', () => {
-      currentArmorIndex = (currentArmorIndex - 1 + armors.length) % armors.length;
-      updateArmorUI();
-      if (autoEquipEnabled) triggerEquip();
-    });
-
-    btnNext.addEventListener('click', () => {
-      currentArmorIndex = (currentArmorIndex + 1) % armors.length;
-      updateArmorUI();
-      if (autoEquipEnabled) triggerEquip();
-    });
-
-    btnEquip.addEventListener('click', () => {
-      triggerEquip();
-    });
-
-    // Pose stance cycling
-    btnPoseMode.addEventListener('click', () => {
-      poseModeIndex = (poseModeIndex + 1) % poseModes.length;
-      poseModeLabel.textContent = 'STANCE: ' + poseModes[poseModeIndex];
-      playSound('click');
-      if (autoEquipEnabled) triggerEquip();
-    });
-
-    // Sound toggle
-    btnAudioToggle.addEventListener('click', () => {
-      soundEnabled = !soundEnabled;
-      audioLabel.textContent = soundEnabled ? 'FX SOUND: ON' : 'FX SOUND: OFF';
-      playSound('click');
-    });
-
-    // Webcam Toggle
-    btnToggleCam.addEventListener('click', async () => {
-      playSound('click');
-      if (cameraActive) {
-        // Turn off
-        if (video.srcObject) {
-          video.srcObject.getTracks().forEach(track => track.stop());
-        }
-        cameraActive = false;
-        statusText.textContent = 'SIMULATOR ACTIVE';
-        btnToggleCam.style.color = 'var(--cyan)';
-      } else {
-        // Request Camera
-        try {
-          const stream = await navigator.mediaDevices.getUserMedia({
-            video: {
-              facingMode: 'user',
-              width: { ideal: 1280 },
-              height: { ideal: 720 }
-            }
-          });
-          video.srcObject = stream;
-          video.play();
-          cameraActive = true;
-          statusText.textContent = 'LIVE WEBCAM AR';
-          btnToggleCam.style.color = '#10b981';
-        } catch (err) {
-          console.warn('Camera access error:', err);
-          alert('Camera permission denied or camera not found. Continuing with Virtual Pose Simulator!');
-        }
-      }
-    });
-
-    // Take Snapshot
-    btnSnapshot.addEventListener('click', () => {
-      playSound('click');
-      const dataUrl = canvas.toDataURL('image/png');
-      const a = document.createElement('a');
-      a.href = dataUrl;
-      a.download = `ar_${armors[currentArmorIndex].id}_snapshot.png`;
-      a.click();
-    });
-
-    // Info Modal
-    btnInfo.addEventListener('click', () => {
-      infoModal.style.display = 'flex';
-      playSound('click');
-    });
-
-    btnCloseModal.addEventListener('click', () => {
-      infoModal.style.display = 'none';
-      playSound('click');
-    });
-
-    // Auto-equip on start
+    // Initial setup on start
+    updateDrawerUI();
     setTimeout(() => {
-      if (autoEquipEnabled) triggerEquip();
-    }, 600);
+      triggerAutoEquip();
+    }, 500);
   </script>
 </body>
 </html>
