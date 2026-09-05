@@ -54,7 +54,7 @@ import com.example.model.ArmorDefinition
 
 val HudNeonCyan = Color(0xFF00F0FF)
 val HudNeonGreen = Color(0xFF00FF66)
-val HudDarkBg = Color(0xCC090D16)
+val HudDarkBg = Color(0xF0030C22) // Rich Dark Blue HUD background
 val HudGlassBorder = Color(0x4400F0FF)
 
 /**
